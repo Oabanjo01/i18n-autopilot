@@ -1,16 +1,6 @@
 # Lingo.dev Setup Guide
 
-i18n Autopilot uses [Lingo.dev](https://lingo.dev) for AI-powered translations. This was part of the [Lingo.dev](https://lingo.dev) hackathon for 2026. Here's how to get started.
-
----
-
-## Important Notes
-
-⚠️ **Function Components Only** — Currently supports React function components and hooks. Class components are not supported (they require the `withTranslation` HOC instead of the `useTranslation` hook).
-
-⚠️ **File Modification** — This tool rewrites your source files. Always commit your code before running, or use `--dry-run` to preview changes first.
-
-⚠️ **Custom Text Components** — If your app uses custom Text wrappers (e.g., `ThemedText`, `AppText`), specify them when prompted. Otherwise, those strings won't be extracted.
+i18n Autopilot uses [Lingo.dev](https://lingo.dev) for AI-powered translations. Here's how to get started.
 
 ---
 
@@ -121,9 +111,9 @@ npx i18n-autopilot
 
 ## Next Steps
 
-- [How It Works](./docs/HOW_IT_WORKS.md) — Understand the translation pipeline
-- [Usage Guide](.//docs/USAGE.md) — Learn workflows and best practices
-- [FAQ](./docs/FAQ.md) — Common questions
+- [How It Works](./HOW_IT_WORKS.md) — Understand the translation pipeline
+- [Usage Guide](./USAGE.md) — Learn workflows and best practices
+- [FAQ](./FAQ.md) — Common questions
 
 ---
 

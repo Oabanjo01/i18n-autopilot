@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { loadTrackingData, getUnprocessedOrModifiedFiles } from "./tracker";
 
 export interface ScannedFile {
   filePath: string;
@@ -80,4 +81,29 @@ export function scanProject(projectPath: string): ScannedFile[] {
 
   walk(absolutePath);
   return results;
+}
+
+export function scanProjectSmart(projectPath: string): {
+  allFiles: ScannedFile[];
+  filesToProcess: Array<ScannedFile & { reason: "new" | "modified" }>;
+  stats: {
+    total: number;
+    new: number;
+    modified: number;
+    unchanged: number;
+  };
+} {
+  const allFiles = scanProject(projectPath);
+  const trackingData = loadTrackingData(projectPath);
+  
+  const filesToProcess = getUnprocessedOrModifiedFiles(allFiles, trackingData);
+  
+  const stats = {
+    total: allFiles.length,
+    new: filesToProcess.filter((f) => f.reason === "new").length,
+    modified: filesToProcess.filter((f) => f.reason === "modified").length,
+    unchanged: allFiles.length - filesToProcess.length,
+  };
+  
+  return { allFiles, filesToProcess, stats };
 }

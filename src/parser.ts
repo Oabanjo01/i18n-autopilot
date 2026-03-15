@@ -31,6 +31,75 @@ function isTranslatableString(value: string): boolean {
   return true;
 }
 
+function extractAllTextFromJSXElement(
+  element: t.JSXElement,
+  results: ExtractedString[],
+  filePath: string
+): void {
+  for (const child of element.children) {
+    // <Text>Hello world</Text>
+    if (t.isJSXText(child)) {
+      const value = child.value.trim();
+      if (isTranslatableString(value)) {
+        results.push({ key: "", value, filePath, nodeType: "JSXText" });
+      }
+    }
+
+    // <Text>{'Hello world'}</Text>
+    if (
+      t.isJSXExpressionContainer(child) &&
+      t.isStringLiteral(child.expression)
+    ) {
+      const value = child.expression.value.trim();
+      if (isTranslatableString(value)) {
+        results.push({
+          key: "",
+          value,
+          filePath,
+          nodeType: "StringLiteral",
+        });
+      }
+    }
+
+    // <Text>{`Hello world`}</Text>
+    if (
+      t.isJSXExpressionContainer(child) &&
+      t.isTemplateLiteral(child.expression) &&
+      child.expression.expressions.length === 0
+    ) {
+      const value = child.expression.quasis[0].value.cooked?.trim() ?? "";
+      if (isTranslatableString(value)) {
+        results.push({
+          key: "",
+          value,
+          filePath,
+          nodeType: "StringLiteral",
+        });
+      }
+    }
+
+    // Recursively handle nested JSX elements
+    if (t.isJSXElement(child)) {
+      extractAllTextFromJSXElement(child, results, filePath);
+    }
+
+    // Handle JSX fragments
+    if (t.isJSXFragment(child)) {
+      for (const fragmentChild of child.children) {
+        if (t.isJSXText(fragmentChild)) {
+          const value = fragmentChild.value.trim();
+          if (isTranslatableString(value)) {
+            results.push({ key: "", value, filePath, nodeType: "JSXText" });
+          }
+        }
+        if (t.isJSXElement(fragmentChild)) {
+          extractAllTextFromJSXElement(fragmentChild, results, filePath);
+        }
+      }
+    }
+  }
+}
+
 function extractFromComponent(
   source: string,
   filePath: string,
@@ -49,48 +118,8 @@ function extractFromComponent(
 
       if (!isTextComponent) return;
 
-      for (const child of path.node.children) {
-        // <Text>Hello world</Text>
-        if (t.isJSXText(child)) {
-          const value = child.value.trim();
-          if (isTranslatableString(value)) {
-            results.push({ key: "", value, filePath, nodeType: "JSXText" });
-          }
-        }
-
-        // <Text>{'Hello world'}</Text>
-        if (
-          t.isJSXExpressionContainer(child) &&
-          t.isStringLiteral(child.expression)
-        ) {
-          const value = child.expression.value.trim();
-          if (isTranslatableString(value)) {
-            results.push({
-              key: "",
-              value,
-              filePath,
-              nodeType: "StringLiteral",
-            });
-          }
-        }
-
-        // <Text>{`Hello world`}</Text>
-        if (
-          t.isJSXExpressionContainer(child) &&
-          t.isTemplateLiteral(child.expression) &&
-          child.expression.expressions.length === 0
-        ) {
-          const value = child.expression.quasis[0].value.cooked?.trim() ?? "";
-          if (isTranslatableString(value)) {
-            results.push({
-              key: "",
-              value,
-              filePath,
-              nodeType: "StringLiteral",
-            });
-          }
-        }
-      }
+      // Extract all text recursively
+      extractAllTextFromJSXElement(path.node, results, filePath);
     },
   });
 

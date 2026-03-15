@@ -14,6 +14,7 @@ import { ExtractedString } from './parser';
 import { execSync } from 'child_process';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
+import { log } from './reporter';
 
 interface RewriterOptions {
   projectPath: string;
@@ -381,7 +382,7 @@ export async function ensureI18nDependencies(
   ]);
 
   if (!permission) {
-    console.log(chalk.yellow(`\n  Install manually inside your project: ${installCmd}\n`));
+    log(chalk.yellow(`\n  Install manually inside your project: ${installCmd}\n`));
     return false;
   }
 

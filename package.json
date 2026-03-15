@@ -2,16 +2,52 @@
   "name": "i18n-autopilot",
   "version": "1.0.0",
   "license": "MIT",
-  "description": "Instant i18n for React Native codebases",
-  "main": "dist/index.js",
+  "description": "Instant i18n for React Native codebases — powered by Lingo.dev",
+  "main": "dist/bin/index.js",
   "bin": {
-    "i18n-autopilot": "./bin/index.ts"
+    "i18n-autopilot": "./dist/bin/index.js"
+  },
+  "author": {
+    "name": "Olabanjo Olakunri",
+    "email": "banjolakunri@gmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Oabanjo01/i18n-autopilot"
+  },
+  "bugs": {
+    "url": "https://github.com/Oabanjo01/i18n-autopilot/issues",
+    "email": "banjolakunri@gmail.com"
   },
   "scripts": {
     "build": "tsc",
     "dev": "ts-node bin/index.ts",
-    "start": "node dist/bin/index.js"
+    "start": "node dist/bin/index.js",
+    "prepublishOnly": "yarn build",
+    "checklog": "cat /tmp/i18n-autopilot.log",
+    "watchlogs": "tail -f ~/.i18n-autopilot/run.log",
+    "test": "echo \"No tests yet\" && exit 0"
   },
+  "files": [
+    "dist",
+    "docs",
+    "README.md",
+    "LICENSE"
+  ],
+  "homepage": "https://github.com/Oabanjo01/i18n-autopilot/blob/main/readme.md",
+  "keywords": [
+     "i18n",
+    "internationalization",
+    "react-native",
+    "react-native-i18n",
+    "translation",
+    "localization",
+    "lingo",
+    "automation",
+    "cli",
+    "expo",
+    "mobile"
+  ],
   "dependencies": {
     "@babel/generator": "^7.29.1",
     "@babel/parser": "^7.29.0",
@@ -28,5 +64,8 @@
     "@types/node": "^25.5.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

@@ -14,12 +14,12 @@ const STOP_WORDS = new Set([
 function toKey(value: string): string {
   const words = value
     .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')  // punctuation → space
+    .replace(/[^a-z0-9\s]/g, ' ') 
     .trim()
-    .split(/\s+/)                   // split into words
-    .filter(w => w.length > 1)      // drop single chars
-    .filter(w => !STOP_WORDS.has(w)) // drop stop words
-    .slice(0, 3);                    // take first 3 meaningful words
+    .split(/\s+/)                   
+    .filter(w => w.length > 1)      
+    .filter(w => !STOP_WORDS.has(w)) 
+    .slice(0, 3);                    
 
   return words.join('_') || 'string';
 }

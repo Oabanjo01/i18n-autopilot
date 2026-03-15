@@ -1,0 +1,22 @@
+src/
+bin/
+tsconfig.json
+*.ts
+!*.d.ts
+
+# Development
+.git
+.github
+node_modules
+*.log
+.DS_Store
+
+# Tests (none yet)
+__tests__/
+*.test.ts
+*.spec.ts
+
+# Config
+.vscode
+.idea
+.env
