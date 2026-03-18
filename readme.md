@@ -127,4 +127,7 @@ npx i18n-autopilot
 
 ---
 
+[![npm version](https://badge.fury.io/js/i18n-autopilot.svg)](https://www.npmjs.com/package/i18n-autopilot)
+[![npm downloads](https://img.shields.io/npm/dm/i18n-autopilot.svg)](https://www.npmjs.com/package/i18n-autopilot)
+
 **Need help?** Contact Lingo.dev support or open an issue on GitHub.

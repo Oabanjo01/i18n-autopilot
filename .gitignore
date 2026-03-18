@@ -31,3 +31,6 @@ Thumbs.db
 
 # Debug
 /tmp/i18n-autopilot-debug.json
+
+# Roadmap
+ROADMAP.md
