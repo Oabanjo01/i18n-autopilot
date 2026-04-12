@@ -1,6 +1,6 @@
 {
   "name": "i18n-autopilot",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "license": "MIT",
   "description": "Instant i18n for React Native codebases — powered by Lingo.dev",
   "main": "dist/bin/index.js",
@@ -26,7 +26,8 @@
     "prepublishOnly": "yarn build",
     "checklog": "cat /tmp/i18n-autopilot.log",
     "watchlogs": "tail -f ~/.i18n-autopilot/run.log",
-    "test": "echo \"No tests yet\" && exit 0"
+    "test": "ts-node tests/deep-rewriter.test.ts",
+    "self-test": "echo 'Just grab this path: tests/fixtures/deep-analyzer-sample/' && npx ts-node bin/index.ts --deep"
   },
   "files": [
     "dist",
@@ -36,7 +37,7 @@
   ],
   "homepage": "https://github.com/Oabanjo01/i18n-autopilot/blob/main/readme.md",
   "keywords": [
-     "i18n",
+    "i18n",
     "internationalization",
     "react-native",
     "react-native-i18n",
@@ -67,5 +68,6 @@
   },
   "engines": {
     "node": ">=18.0.0"
-  }
+  },
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
 }

@@ -1,7 +1,6 @@
-/** src/tracker.ts
- * 
- * Just to track the hash of files that have been changed
-*/
+/**
+ * Persist file hashes so repeated runs only process new or changed files.
+ */
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
@@ -31,7 +30,7 @@ export function loadTrackingData(projectPath: string): TrackingData {
   const trackingPath = getTrackingPath(projectPath);
   
   if (!fs.existsSync(trackingPath)) {
-    return { files: {}, version: "1.0.0" };
+    return { files: {}, version: "1.0.1" };
   }
   
   try {
@@ -39,7 +38,7 @@ export function loadTrackingData(projectPath: string): TrackingData {
     return JSON.parse(content);
   } catch (err) {
     console.warn("Warning: Could not parse tracking data, starting fresh");
-    return { files: {}, version: "1.0.0" };
+    return { files: {}, version: "1.0.1" };
   }
 }
 

@@ -1,6 +1,8 @@
 /**
- * src/parser.ts - The detective.
- * Takes each file the scanner found, reads the code as an AST tree, and finds every hardcoded string sitting inside a <Text> component.
+ * Parse component and hook files and collect candidate strings for translation.
+ *
+ * This module focuses on direct user-facing text in JSX text components and
+ * string initialisers passed to supported hooks.
  */
 
 import * as babelParser from "@babel/parser";
@@ -12,7 +14,12 @@ export interface ExtractedString {
   key: string;
   value: string;
   filePath: string;
-  nodeType: "JSXText" | "StringLiteral" | "useState";
+  nodeType:
+    | "JSXText"
+    | "StringLiteral"
+    | "useState"
+    | "ObjectProperty"
+    | "ArrayElement";
 }
 
 function parseSource(source: string) {
@@ -34,7 +41,7 @@ function isTranslatableString(value: string): boolean {
 function extractAllTextFromJSXElement(
   element: t.JSXElement,
   results: ExtractedString[],
-  filePath: string
+  filePath: string,
 ): void {
   for (const child of element.children) {
     // <Text>Hello world</Text>

@@ -28,6 +28,7 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+.kiro/
 
 # Debug
 /tmp/i18n-autopilot-debug.json

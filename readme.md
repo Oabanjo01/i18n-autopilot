@@ -1,6 +1,24 @@
 # Lingo.dev Setup Guide
 
-i18n Autopilot uses [Lingo.dev](https://lingo.dev) for AI-powered translations. This was part of the [Lingo.dev](https://lingo.dev) hackathon for 2026. Here's how to get started.
+i18n Autopilot uses [Lingo.dev](https://lingo.dev) for AI-powered
+translations. This guide covers setup and the current behavior of deep
+container-based extraction so teams know what to expect before running the
+package.
+
+## Deep Analysis Update
+
+The latest `--deep` update makes two important changes:
+
+- Module-scope arrays, objects, and Maps are rewritten as functions that
+  receive `t`, which keeps the generated code compatible with React hooks.
+- Deep analysis now follows rendered user-facing values instead of rewriting
+  every string found in a container.
+
+In practice, visible labels and messages are translated, while structural
+values such as routes, paths, IDs, and JSX keys are left untouched.
+
+This update lays the groundwork for broader user-facing extraction while
+keeping rewrites safe and reviewable.
 
 ---
 
@@ -11,6 +29,10 @@ i18n Autopilot uses [Lingo.dev](https://lingo.dev) for AI-powered translations. 
 ⚠️ **File Modification** — This tool rewrites your source files. Always commit your code before running, or use `--dry-run` to preview changes first.
 
 ⚠️ **Custom Text Components** — If your app uses custom Text wrappers (e.g., `ThemedText`, `AppText`), specify them when prompted. Otherwise, those strings won't be extracted.
+
+⚠️ **Deep Mode Scope** — `--deep` translates rendered container values. Unused
+entries in arrays or objects are intentionally left unchanged until they are
+actually rendered.
 
 ---
 

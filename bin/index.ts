@@ -14,8 +14,13 @@ import {
 } from "../src/lingoRunner";
 import { buildLocaleFile } from "../src/localeBuilder";
 import { parseFiles } from "../src/parser";
+import { deepAnalyzeFiles } from "../src/deepAnalyzer";
 import { getLogPath, initLog, log } from "../src/reporter";
-import { ensureI18nDependencies, rewriteFiles } from "../src/rewriter";
+import {
+  ensureI18nDependencies,
+  rewriteFiles,
+  rewriteDeepFiles,
+} from "../src/rewriter";
 import { scanProjectSmart } from "../src/scanner";
 import {
   loadTrackingData,
@@ -26,8 +31,9 @@ import {
 program
   .name("i18n-autopilot")
   .description("Instant i18n for React Native codebases")
-  .version("1.0.0")
+  .version("1.0.1")
   .option("--dry-run", "Preview changes without writing any files")
+  .option("--deep", "Enable deep object/array/Map string extraction")
   .parse(process.argv);
 
 const options = program.opts();
@@ -123,10 +129,49 @@ async function main() {
     const parseSpinner = ora(
       "Parsing strings from new/modified files...",
     ).start();
-    const extracted = parseFiles(filesToProcess, textComponents);
+    let extracted = parseFiles(filesToProcess, textComponents);
     parseSpinner.succeed(
       `Found ${extracted.length} translatable strings in ${filesToProcess.length} files`,
     );
+
+    // Step 2b — Deep analysis (opt-in via --deep)
+    if (options.deep) {
+      log(
+        chalk.cyan(
+          "\n  Deep mode active — analyzing object/array/Map strings...\n",
+        ),
+      );
+      const deepResult = deepAnalyzeFiles(filesToProcess, {
+        textComponents,
+        dryRun: options.dryRun,
+      });
+      extracted.push(...deepResult.extracted);
+      if (deepResult.stats.translatablePropertiesFound > 0) {
+        log(
+          chalk.gray(
+            `  Deep analysis: ${deepResult.stats.sourceObjectsAnalyzed} source objects analyzed, ${deepResult.stats.translatablePropertiesFound} additional strings found`,
+          ),
+        );
+      }
+      if (deepResult.skippedFiles.length > 0) {
+        log(
+          chalk.yellow(
+            `  Deep analysis: ${deepResult.skippedFiles.length} file(s) skipped — see log for details`,
+          ),
+        );
+        deepResult.skippedFiles.forEach((s) =>
+          log(chalk.gray(`    ⚠️  ${s.filePath}: ${s.reason}`)),
+        );
+      }
+      if (
+        deepResult.stats.translatablePropertiesFound === 0 &&
+        deepResult.skippedFiles.length === 0
+      ) {
+        log(
+          chalk.gray("  Deep analysis: no object/array/Map strings found.\n"),
+        );
+      }
+    }
 
     // Step 3 — Generate keys
     const keySpinner = ora("Generating keys...").start();
@@ -223,6 +268,25 @@ async function main() {
     rewriteSpinner.succeed(
       `Rewrote ${modifiedCount} files, skipped ${skippedCount}`,
     );
+
+    // Step 6b — Deep rewrite (only in deep mode)
+    if (options.deep) {
+      const deepRewriteResults = rewriteDeepFiles({
+        projectPath: answers.projectPath,
+        extracted: keyed,
+        textComponents,
+        dryRun: options.dryRun,
+      });
+      const deepModified = deepRewriteResults.filter((r) => r.modified).length;
+      const deepSkipped = deepRewriteResults.filter((r) => r.skipped).length;
+      if (deepModified > 0 || deepSkipped > 0) {
+        log(
+          chalk.gray(
+            `  Deep rewrite: ${deepModified} files rewritten, ${deepSkipped} skipped`,
+          ),
+        );
+      }
+    }
 
     const trackingData = loadTrackingData(answers.projectPath);
     rewriteResults.forEach((result) => {

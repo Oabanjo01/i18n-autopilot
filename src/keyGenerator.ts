@@ -1,27 +1,25 @@
 /**
- * src/keyGenerator.ts — The labeller.
- * Takes each string the parser found and turns it into a clean key. "Welcome back!" → welcome_back.
- * These keys are what t() will reference.
+ * Generate stable translation keys from extracted source strings.
  */
 
-import { ExtractedString } from './parser';
+import { ExtractedString } from "./parser";
 
 const STOP_WORDS = new Set([
-  'a', 'an', 'the', 'and', 'or', 'but', 'in', 'on',
-  'at', 'to', 'for', 'of', 'with', 'is', 'it', 'this',
+  "a", "an", "the", "and", "or", "but", "in", "on",
+  "at", "to", "for", "of", "with", "is", "it", "this",
 ]);
 
 function toKey(value: string): string {
   const words = value
     .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ') 
+    .replace(/[^a-z0-9\s]/g, " ")
     .trim()
-    .split(/\s+/)                   
-    .filter(w => w.length > 1)      
-    .filter(w => !STOP_WORDS.has(w)) 
-    .slice(0, 3);                    
+    .split(/\s+/)
+    .filter((w) => w.length > 1)
+    .filter((w) => !STOP_WORDS.has(w))
+    .slice(0, 3);
 
-  return words.join('_') || 'string';
+  return words.join("_") || "string";
 }
 
 export function generateKeys(extracted: ExtractedString[]): ExtractedString[] {

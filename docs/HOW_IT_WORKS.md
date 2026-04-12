@@ -1,6 +1,9 @@
 # How It Works
 
-i18n Autopilot runs a 7-step automated pipeline to internationalize your React Native app.
+i18n Autopilot runs a 7-step automated pipeline to internationalize your React
+Native app. The current deep-analysis implementation extends that pipeline so
+container-based strings can be translated safely without rewriting structural
+data such as routes or JSX keys.
 
 ---
 
@@ -81,6 +84,21 @@ StyleSheet.create({ label: "red" })         ⏭ Non-user-facing
 ```
 
 **Validation:** Strings must be 2+ characters and contain at least one letter.
+
+### Deep Analysis Extension
+
+When `--deep` is enabled, `deepAnalyzer.ts` performs an additional static
+analysis pass after the base parser.
+
+It follows:
+- Object literals accessed from JSX
+- Arrays rendered with `.map()`
+- Indexed access such as `ITEMS[0].label`
+- One-level aliases such as `const item = ITEMS[0]`
+- Maps accessed through `.get()` or rendered through `.values()`
+
+The rule is simple: translate rendered user-facing values, not every string
+that happens to exist in the same container.
 
 ---
 
@@ -216,6 +234,30 @@ function MyComponent() {
 - Detects if hook is already declared
 - Only injects where needed
 
+### Deep Rewrite Safety
+
+For `--deep`, the rewriter applies an extra safety step for module-scope
+containers.
+
+Example:
+
+```tsx
+const ITEMS = [
+  { label: "Home", route: "/" },
+];
+```
+
+becomes:
+
+```tsx
+const ITEMS = (t) => [
+  { label: t("home"), route: "/" },
+];
+```
+
+Render sites are then updated to call `ITEMS(t)` from inside the component.
+This keeps the generated code compatible with React's hook rules.
+
 ---
 
 ## Step 7: Content Tracking
@@ -233,7 +275,7 @@ Updates `.i18n-autopilot.json`:
       "keysExtracted": ["welcome_back", "sign"]
     }
   },
-  "version": "1.0.0"
+  "version": "1.0.1"
 }
 ```
 
@@ -258,6 +300,7 @@ Updates `.i18n-autopilot.json`:
 ### Adding a New Language
 1. Scan → finds 34 files (unchanged)
 2. Parse → skipped (no new files)
+
 3. Build → skipped (no new strings)
 4. Translate → only runs for new language
 5. Rewrite → skipped (files already rewritten)

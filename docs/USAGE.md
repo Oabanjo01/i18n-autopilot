@@ -16,6 +16,32 @@ Follow the interactive prompts and you're done.
 
 ## Command-Line Options
 
+### Deep Analysis Mode
+
+Use `--deep` when user-facing text is stored in objects, arrays, or Maps before
+it reaches JSX:
+
+```bash
+npx i18n-autopilot --deep
+```
+
+Deep mode supports:
+- Arrays of objects rendered with `.map()`
+- Plain string arrays rendered with `.map()`
+- Indexed access such as `ITEMS[0].label`
+- One-level indirection such as `const item = ITEMS[0]`
+- Conditional object access such as `flag ? MESSAGES.success : MESSAGES.error`
+- `Map#get(...)` and `Array.from(MAP.values()).map(...)`
+
+Latest behavior changes:
+- Module-scope containers are rewritten as functions that accept `t`
+- Only rendered user-facing values are translated
+- Structural values such as `route`, `path`, IDs, and JSX keys are no longer
+  translated simply because they live in the same object
+
+This update broadens container-based extraction without making rewrites noisy
+or unsafe.
+
 ### Dry Run Mode
 
 Preview all changes without writing any files:
@@ -106,6 +132,36 @@ npx i18n-autopilot
 
 ---
 
+### 5. Deep Container-Based Text
+
+**Scenario:** Your screen renders text from arrays, objects, or Maps
+```bash
+npx i18n-autopilot --deep
+```
+
+**Before:**
+```tsx
+const MENU_ITEMS = [
+  { label: "Home", route: "/" },
+  { label: "Profile", route: "/profile" },
+];
+```
+
+**After:**
+```tsx
+const MENU_ITEMS = (t) => [
+  { label: t("home"), route: "/" },
+  { label: t("profile"), route: "/profile" },
+];
+```
+
+**Result:**
+- User-facing labels are translated
+- Structural values like `route` are preserved
+- Module-scope containers stay safe to use from component scope
+
+---
+
 ## File Structure
 
 After running i18n Autopilot:
@@ -148,6 +204,7 @@ i18n.lock
 ### ✅ DO
 
 - Run `--dry-run` first on large projects
+- Use `--deep` when display text is stored in arrays, objects, or Maps
 - Commit before running (easy to revert if needed)
 - Review diffs before pushing
 - Add `.i18n-autopilot.json` to `.gitignore`
@@ -225,6 +282,17 @@ rm ~/.i18n-autopilot/config.json
 npx i18n-autopilot
 ```
 
+### "Why did only some array items get translated?"
+
+Deep mode follows rendered usage.
+
+- `STEPS[0].text` rewrites entry `0`
+- `STEPS[1].text` rewrites entry `1`
+- `STEPS[2].text` stays unchanged until it is actually rendered
+
+This keeps `--deep` focused on visible text and prevents unrelated data in the
+same container from being rewritten.
+
 ### "See detailed logs"
 
 Check the log file:
@@ -235,6 +303,18 @@ cat ~/.i18n-autopilot/run.log
 ---
 
 ## Advanced Usage
+
+### Contributor Self-Test
+
+If you are working on deep-analysis behavior, use the fixture project in
+`tests/fixtures/deep-analyzer-sample/` to exercise the supported patterns.
+
+```bash
+yarn self-test
+```
+
+This prints the fixture path and starts the CLI in `--deep` mode so you can
+walk through the sample project manually while developing.
 
 ### Programmatic Use
 
