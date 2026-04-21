@@ -99,7 +99,7 @@ Or prefix filename with a dot (`.IgnoreMe.tsx`).
 
 ### What languages are supported?
 
-Spanish (es), French (fr-FR), German (de-DE), Japanese (ja-JP), Portuguese (pt-BR), Chinese Simplified (zh-CN), Arabic (ar-SA)
+Spanish (es), French (fr-FR), German (de-DE), Japanese (ja-JP), Hausa (ha), Portuguese (pt-BR), Chinese Simplified (zh-CN), Arabic (ar-SA)
 
 ### Can I add more languages later?
 

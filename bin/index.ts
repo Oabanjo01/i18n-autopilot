@@ -59,6 +59,7 @@ async function main() {
         { name: "French", value: "fr-FR" },
         { name: "German", value: "de-DE" },
         { name: "Japanese", value: "ja-JP" },
+        { name: "Hausa", value: "ha" },
         { name: "Portuguese", value: "pt-BR" },
         { name: "Chinese Simplified", value: "zh-CN" },
         { name: "Arabic", value: "ar-SA" },
