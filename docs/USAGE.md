@@ -68,6 +68,7 @@ npx i18n-autopilot
 - Project path: `.` (press Enter)
 - Target languages: Select Spanish & French (use Space, then Enter)
 - Custom Text components: (press Enter to skip)
+- Translation provider: Lingo.dev (press Enter for default)
 - Lingo.dev API key: Paste your key
 
 **Result:**

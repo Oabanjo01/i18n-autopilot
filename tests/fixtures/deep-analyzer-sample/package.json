@@ -4,9 +4,9 @@
   "description": "Fixture project for testing i18n-autopilot --deep mode. Contains all 8 object/array/Map string patterns.",
   "private": true,
   "dependencies": {
-    "i18next": "^26.0.4",
+    "i18next": "^26.2.0",
     "react": "18.2.0",
-    "react-i18next": "^17.0.2",
+    "react-i18next": "^17.0.8",
     "react-native": "0.73.0"
   }
 }

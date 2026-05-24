@@ -40,11 +40,20 @@ In `~/.i18n-autopilot/config.json` (outside your project) with `0o600` permissio
 
 ### Can I use a different translation service?
 
-Currently only Lingo.dev is supported. Other providers may be added in future releases.
+Yes! v1.1 adds support for multiple providers. At the provider prompt you can choose:
 
-### What if I don't want to use Lingo.dev?
+- **Lingo.dev** (default) — AI-powered, recommended
+- **DeepL** — high-quality neural translation
+- **Google Translate** — broad language coverage
+- **OpenAI** — GPT-4o, good for context-aware translations
+- **AWS Translate** — good for teams already on AWS
+- **Custom** — point to any local JS file that implements the provider interface
 
-You can run with `--dry-run` to generate `en.json` and rewrite your code, then manually translate the JSON files.
+See [Custom Providers](./CUSTOM_PROVIDERS.md) for examples including Claude and free services like LibreTranslate and MyMemory.
+
+### What if I don't want to use any of the built-in providers?
+
+Use the **Custom** option and point to your own JS file. Ready-to-use examples for Claude, LibreTranslate, and MyMemory are in the `examples/` directory.
 
 ---
 
