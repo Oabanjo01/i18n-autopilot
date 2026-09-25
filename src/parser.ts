@@ -9,6 +9,7 @@ import * as babelParser from "@babel/parser";
 import traverse from "@babel/traverse";
 import * as t from "@babel/types";
 import { ScannedFile } from "./scanner";
+import { findComponentFunction, readJSXText } from "./astHelpers";
 
 export interface ExtractedString {
   key: string;
@@ -38,7 +39,15 @@ function isTranslatableString(value: string): boolean {
   return true;
 }
 
-function extractAllTextFromJSXElement(
+// A lowercase single token ("idle", "loading", "dark") is almost always a
+// state value compared in code, not display text.
+function looksLikeStateValue(value: string): boolean {
+  return /^[a-z][a-z0-9_-]*$/.test(value);
+}
+
+// Only direct children are collected: nested Text elements are visited on
+// their own, and the rewriter can only replace direct children.
+function extractDirectTextChildren(
   element: t.JSXElement,
   results: ExtractedString[],
   filePath: string,
@@ -46,7 +55,7 @@ function extractAllTextFromJSXElement(
   for (const child of element.children) {
     // <Text>Hello world</Text>
     if (t.isJSXText(child)) {
-      const value = child.value.trim();
+      const value = readJSXText(child)?.value ?? "";
       if (isTranslatableString(value)) {
         results.push({ key: "", value, filePath, nodeType: "JSXText" });
       }
@@ -84,26 +93,6 @@ function extractAllTextFromJSXElement(
         });
       }
     }
-
-    // Recursively handle nested JSX elements
-    if (t.isJSXElement(child)) {
-      extractAllTextFromJSXElement(child, results, filePath);
-    }
-
-    // Handle JSX fragments
-    if (t.isJSXFragment(child)) {
-      for (const fragmentChild of child.children) {
-        if (t.isJSXText(fragmentChild)) {
-          const value = fragmentChild.value.trim();
-          if (isTranslatableString(value)) {
-            results.push({ key: "", value, filePath, nodeType: "JSXText" });
-          }
-        }
-        if (t.isJSXElement(fragmentChild)) {
-          extractAllTextFromJSXElement(fragmentChild, results, filePath);
-        }
-      }
-    }
   }
 }
 
@@ -125,8 +114,11 @@ function extractFromComponent(
 
       if (!isTextComponent) return;
 
-      // Extract all text recursively
-      extractAllTextFromJSXElement(path.node, results, filePath);
+      // No function component to hold useTranslation() (class components,
+      // module scope) — the rewriter can't convert these, so don't extract.
+      if (!findComponentFunction(path)) return;
+
+      extractDirectTextChildren(path.node, results, filePath);
     },
   });
 
@@ -146,8 +138,10 @@ function extractFromHook(source: string, filePath: string): ExtractedString[] {
       const arg = path.node.arguments[0];
       if (!arg || !t.isStringLiteral(arg)) return;
 
+      if (!findComponentFunction(path)) return;
+
       const value = arg.value.trim();
-      if (isTranslatableString(value)) {
+      if (isTranslatableString(value) && !looksLikeStateValue(value)) {
         results.push({ key: "", value, filePath, nodeType: "useState" });
       }
     },

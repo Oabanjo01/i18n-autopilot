@@ -2,11 +2,12 @@ import * as fs from "fs";
 import * as path from "path";
 import { TranslationProvider } from "./types";
 import { LingoProvider } from "./lingo";
-import { DeepLProvider } from "./deepl";
 import { GoogleProvider } from "./google";
 import { OpenAIProvider } from "./openai";
 import { ClaudeProvider } from "./claude";
 import { AWSProvider } from "./aws";
+import { LibreTranslateProvider } from "./libretranslate";
+import { MyMemoryProvider } from "./mymemory";
 
 export class ProviderRegistry {
   private providers = new Map<string, TranslationProvider>();
@@ -34,17 +35,19 @@ export class ProviderRegistry {
 
 export interface ProviderCredentials {
   lingo?: { apiKey: string };
-  deepl?: { apiKey: string };
   google?: { apiKey: string };
   openai?: { apiKey: string };
   claude?: { apiKey: string };
   aws?: { accessKeyId: string; secretAccessKey: string; region: string };
+  libretranslate?: { url: string; apiKey: string };
+  mymemory?: { email: string };
 }
 
 /**
  * Builds the default registry, registering only the providers whose
  * credentials are present (non-empty strings). Providers are registered
- * in canonical order: lingo → deepl → google → openai → aws.
+ * in canonical order: lingo → google → openai → claude → aws →
+ * libretranslate → mymemory.
  */
 export function buildDefaultRegistry(
   credentials: ProviderCredentials,
@@ -53,10 +56,6 @@ export function buildDefaultRegistry(
 
   if (credentials.lingo?.apiKey) {
     registry.register(new LingoProvider(credentials.lingo.apiKey));
-  }
-
-  if (credentials.deepl?.apiKey) {
-    registry.register(new DeepLProvider(credentials.deepl.apiKey));
   }
 
   if (credentials.google?.apiKey) {
@@ -85,21 +84,42 @@ export function buildDefaultRegistry(
     );
   }
 
+  if (credentials.libretranslate) {
+    registry.register(
+      new LibreTranslateProvider(
+        credentials.libretranslate.url || "https://libretranslate.com",
+        credentials.libretranslate.apiKey || "",
+      ),
+    );
+  }
+
+  if (credentials.mymemory !== undefined) {
+    registry.register(new MyMemoryProvider(credentials.mymemory.email || ""));
+  }
+
   return registry;
 }
 
 /**
- * Resolves the active provider from the registry, optionally loading a
- * custom provider from disk first.
+ * Resolves the active provider from the registry.
+ * When "custom" is selected and a file path is given, loads the module from
+ * disk and returns it directly — it is not looked up by the string "custom"
+ * since the file exports its own name.
  */
 export async function resolveProvider(
   registry: ProviderRegistry,
   selectedName: string,
   customPath?: string,
 ): Promise<TranslationProvider> {
-  if (selectedName === "custom" && customPath) {
-    const custom = await loadCustomProvider(customPath);
+  if (selectedName === "custom") {
+    if (!customPath?.trim()) {
+      throw new Error(
+        'The "custom" provider needs the path to a JS file that exports your provider.',
+      );
+    }
+    const custom = await loadCustomProvider(customPath.trim());
     registry.register(custom);
+    return custom;
   }
   return registry.get(selectedName);
 }

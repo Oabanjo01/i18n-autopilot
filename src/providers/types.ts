@@ -4,7 +4,7 @@
  * target locale file — callers are responsible for diffing.
  */
 export interface TranslationProvider {
-  /** Human-readable identifier, e.g. "lingo", "deepl". Must be unique in the registry. */
+  /** Human-readable identifier, e.g. "lingo", "openai". Must be unique in the registry. */
   readonly name: string;
 
   /**

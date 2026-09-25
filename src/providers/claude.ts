@@ -1,16 +1,44 @@
 /**
  * src/providers/claude.ts — Anthropic Claude translation adapter.
- * Uses the Messages API (claude-opus-4-5) via native fetch (Node ≥ 18).
- * Sends the full key→value map as a JSON object and asks the model to
- * return a JSON object with the same keys and translated values.
+ * Translates in batches via the Messages API, using structured outputs so each
+ * response is valid JSON containing exactly the requested keys.
  */
 
+import Anthropic from "@anthropic-ai/sdk";
 import { TranslationProvider, ProviderError } from "./types";
+
+const MODEL = "claude-opus-5";
+const BATCH_SIZE = 50;
+const MAX_TOKENS = 16000;
+
+function chunkEntries(
+  data: Record<string, string>,
+  size: number,
+): Record<string, string>[] {
+  const entries = Object.entries(data);
+  const chunks: Record<string, string>[] = [];
+  for (let i = 0; i < entries.length; i += size) {
+    chunks.push(Object.fromEntries(entries.slice(i, i + size)));
+  }
+  return chunks;
+}
+
+function schemaForKeys(keys: string[]) {
+  return {
+    type: "object",
+    properties: Object.fromEntries(keys.map((k) => [k, { type: "string" }])),
+    required: keys,
+    additionalProperties: false,
+  };
+}
 
 export class ClaudeProvider implements TranslationProvider {
   readonly name = "claude";
+  private readonly client: Anthropic;
 
-  constructor(private readonly apiKey: string) {}
+  constructor(apiKey: string) {
+    this.client = new Anthropic({ apiKey });
+  }
 
   async translate(
     data: Record<string, string>,
@@ -19,47 +47,71 @@ export class ClaudeProvider implements TranslationProvider {
   ): Promise<Record<string, string>> {
     if (Object.keys(data).length === 0) return {};
 
-    const prompt =
-      `Translate the following JSON object values from ${sourceLocale} to ${targetLocale}.\n` +
-      `Return ONLY a valid JSON object with the same keys and translated values.\n` +
-      `Do not add any explanation, markdown, or code fences.\n\n` +
-      JSON.stringify(data, null, 2);
+    const result: Record<string, string> = {};
+    for (const batch of chunkEntries(data, BATCH_SIZE)) {
+      Object.assign(
+        result,
+        await this.translateBatch(batch, sourceLocale, targetLocale),
+      );
+    }
+    return result;
+  }
 
-    let response: Response;
+  private async translateBatch(
+    batch: Record<string, string>,
+    sourceLocale: string,
+    targetLocale: string,
+  ): Promise<Record<string, string>> {
+    const keys = Object.keys(batch);
+
+    let response: Anthropic.Beta.BetaMessage;
     try {
-      response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "x-api-key": this.apiKey,
-          "anthropic-version": "2023-06-01",
-          "content-type": "application/json",
+      response = await this.client.beta.messages.create({
+        model: MODEL,
+        max_tokens: MAX_TOKENS,
+        betas: ["server-side-fallback-2026-07-01"],
+        fallbacks: "default",
+        output_config: {
+          effort: "low",
+          format: { type: "json_schema", schema: schemaForKeys(keys) },
         },
-        body: JSON.stringify({
-          model: "claude-opus-4-5",
-          max_tokens: 4096,
-          messages: [{ role: "user", content: prompt }],
-        }),
+        messages: [
+          {
+            role: "user",
+            content:
+              `These are user-facing strings from a mobile app UI. Translate each value from ${sourceLocale} to ${targetLocale}. ` +
+              `Keep the same keys, preserve placeholders like {{name}} and any leading/trailing whitespace, and match the tone of an app interface.\n\n` +
+              JSON.stringify(batch, null, 2),
+          },
+        ],
       });
     } catch (err: unknown) {
+      if (err instanceof Anthropic.APIError) {
+        throw new ProviderError(
+          "claude",
+          `HTTP ${err.status ?? "error"}: ${err.message}`,
+        );
+      }
       throw new ProviderError(
         "claude",
         err instanceof Error ? err.message : String(err),
       );
     }
 
-    if (!response.ok) {
-      const bodyExcerpt = (await response.text()).slice(0, 200);
+    if (response.stop_reason === "refusal") {
+      throw new ProviderError("claude", "Model declined to translate this batch");
+    }
+    if (response.stop_reason === "max_tokens") {
       throw new ProviderError(
         "claude",
-        `HTTP ${response.status}: ${bodyExcerpt}`,
+        `Response was truncated at ${MAX_TOKENS} tokens for a batch of ${keys.length} strings`,
       );
     }
 
-    const json = (await response.json()) as {
-      content: Array<{ type: string; text: string }>;
-    };
-
-    const rawContent = json.content.find((c) => c.type === "text")?.text ?? "";
+    const rawContent =
+      response.content.find(
+        (b): b is Anthropic.Beta.BetaTextBlock => b.type === "text",
+      )?.text ?? "";
 
     let translated: Record<string, string>;
     try {
@@ -71,9 +123,7 @@ export class ClaudeProvider implements TranslationProvider {
       );
     }
 
-    // Validate that the returned keys match the input keys
-    const inputKeys = Object.keys(data);
-    const missingKeys = inputKeys.filter((k) => !(k in translated));
+    const missingKeys = keys.filter((k) => typeof translated[k] !== "string");
     if (missingKeys.length > 0) {
       throw new ProviderError(
         "claude",
@@ -81,6 +131,6 @@ export class ClaudeProvider implements TranslationProvider {
       );
     }
 
-    return translated;
+    return Object.fromEntries(keys.map((k) => [k, translated[k]]));
   }
 }

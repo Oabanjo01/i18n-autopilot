@@ -13,7 +13,7 @@ import { log } from "../reporter";
 import { TranslationProvider, ProviderError } from "./types";
 
 // ---------------------------------------------------------------------------
-// Private helpers (moved verbatim from src/lingoRunner.ts)
+// Private helpers
 // ---------------------------------------------------------------------------
 
 function createTempDir(): string {
@@ -179,56 +179,6 @@ async function runLingoForLocale(
 // ---------------------------------------------------------------------------
 // Public exports
 // ---------------------------------------------------------------------------
-
-/**
- * Returns the subset of keys in `enMap` that are missing from the target
- * locale file, or `null` if the locale is already up to date.
- * Renamed from `getMissingKeys` in lingoRunner.ts for clarity.
- */
-export function getMissingLocaleKeys(
-  projectPath: string,
-  locale: string,
-  enMap: Record<string, string>,
-): Record<string, string> | null {
-  const filePath = path.join(
-    path.resolve(projectPath),
-    "locales",
-    `${locale}.json`,
-  );
-
-  if (!fs.existsSync(filePath)) return enMap;
-
-  const existing = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-  const missingKeys = Object.keys(enMap).filter((key) => !(key in existing));
-
-  if (missingKeys.length === 0) return null;
-
-  return Object.fromEntries(missingKeys.map((key) => [key, enMap[key]]));
-}
-
-/**
- * Merges `newTranslations` into the existing locale file at
- * `<projectPath>/locales/<locale>.json`, creating the file if needed.
- * Renamed from `mergeIntoLocaleFile` in lingoRunner.ts for clarity.
- */
-export function mergeTranslationsIntoLocaleFile(
-  projectPath: string,
-  locale: string,
-  newTranslations: Record<string, string>,
-): void {
-  const filePath = path.join(
-    path.resolve(projectPath),
-    "locales",
-    `${locale}.json`,
-  );
-
-  const existing = fs.existsSync(filePath)
-    ? JSON.parse(fs.readFileSync(filePath, "utf-8"))
-    : {};
-
-  const merged = { ...existing, ...newTranslations };
-  fs.writeFileSync(filePath, JSON.stringify(merged, null, 2), "utf-8");
-}
 
 /**
  * Lingo.dev translation adapter.

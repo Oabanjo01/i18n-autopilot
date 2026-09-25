@@ -51,7 +51,7 @@ function writeConfig(config: Config): void {
 /**
  * Loads the stored credentials for a given provider.
  *
- * @param providerName  The provider's registry key, e.g. "lingo", "deepl".
+ * @param providerName  The provider's registry key, e.g. "lingo", "openai".
  * @returns             The credential map, or null if not found.
  */
 export function loadCredential(

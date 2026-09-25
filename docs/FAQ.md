@@ -9,7 +9,7 @@
 It automatically internationalizes your React Native app by:
 1. Finding all hardcoded strings
 2. Replacing them with translation keys
-3. Generating translation files for multiple languages
+3. Generating translation files for multiple languages, using the translation provider you choose
 
 ### Is it safe to run on my production codebase?
 
@@ -30,30 +30,40 @@ Fully supported. The tool parses `.tsx` files using Babel.
 
 ## Setup & Configuration
 
-### How do I get a Lingo.dev API key?
+### Which translation providers are supported?
 
-See the [Lingo.dev Setup Guide](./LINGO_SETUP.md).
+You pick one at the provider prompt on every run — there is no default:
+
+- **Lingo.dev** — AI localization platform with brand voice, glossary, and translation memory
+- **Google Translate** — Cloud Translation API, broad language coverage
+- **OpenAI** — GPT-4o, context-aware translations
+- **Claude (Anthropic)** — LLM-based, context-aware translations
+- **AWS Translate** — convenient for teams already on AWS
+- **LibreTranslate** — open source, free to self-host
+- **MyMemory** — free, no key required (daily word limit)
+- **Custom** — point to any local JS file that implements the provider interface
+
+See the [Providers Guide](./PROVIDERS.md) for setup steps and limitations.
+
+### How do I get an API key?
+
+It depends on the provider — the [Providers Guide](./PROVIDERS.md) covers each one. For Lingo.dev, see the [Lingo.dev Setup Guide](./LINGO_SETUP.md). MyMemory needs no key at all.
+
+### Can I use a free provider?
+
+Yes. **MyMemory** needs no account (5k words/day, or 50k with an email). **LibreTranslate** is free when you self-host it. Lingo.dev's free tier also works. A **custom** provider running a local model (e.g. Ollama) costs nothing per request.
 
 ### Where is my API key stored?
 
-In `~/.i18n-autopilot/config.json` (outside your project) with `0o600` permissions (owner-only read/write).
+In `~/.i18n-autopilot/config.json` (outside your project) with `0o600` permissions (owner-only read/write). Credentials are saved separately for each provider, so switching providers doesn't overwrite a key you saved earlier.
 
-### Can I use a different translation service?
+### Can I switch providers?
 
-Yes! v1.1 adds support for multiple providers. At the provider prompt you can choose:
+Yes. Pick a different one on your next run. Existing translations are kept; only keys missing from each locale file (plus any changed English you choose to re-translate) are sent to the new provider.
 
-- **Lingo.dev** (default) — AI-powered, recommended
-- **DeepL** — high-quality neural translation
-- **Google Translate** — broad language coverage
-- **OpenAI** — GPT-4o, good for context-aware translations
-- **AWS Translate** — good for teams already on AWS
-- **Custom** — point to any local JS file that implements the provider interface
+### Can I use my own AI or translation service?
 
-See [Custom Providers](./CUSTOM_PROVIDERS.md) for examples including Claude and free services like LibreTranslate and MyMemory.
-
-### What if I don't want to use any of the built-in providers?
-
-Use the **Custom** option and point to your own JS file. Ready-to-use examples for Claude, LibreTranslate, and MyMemory are in the `examples/` directory.
+Yes — choose **Custom** and give the CLI the path to a JS file that exports a `name` and an async `translate(data, sourceLocale, targetLocale)` function. See [Custom Provider / Bring Your Own AI](./PROVIDERS.md#custom-provider--bring-your-own-ai) for the contract and a complete example using a local Ollama model.
 
 ---
 
@@ -77,10 +87,15 @@ You can specify custom components:
 
 ### Does it extract from useState hooks?
 
-Yes:
+Yes, inside function components and custom hooks:
 ```tsx
 const [message, setMessage] = useState("Loading..."); // ✅ Extracted
+const [status, setStatus] = useState("idle");         // ⏭ Left alone
 ```
+
+A single lowercase word (`"idle"`, `"loading"`, `"dark"`) is treated as a state
+value your code compares against, not display text, so it isn't translated —
+translating it would break checks like `status === "idle"`.
 
 ### What about TextInput placeholders?
 
@@ -102,13 +117,18 @@ Or prefix filename with a dot (`.IgnoreMe.tsx`).
 
 ### How does translation work?
 
-1. Tool sends `en.json` to Lingo.dev API
-2. Lingo.dev translates using AI + brand voice + glossary
-3. Tool saves translated files (`es.json`, `fr-FR.json`, etc.)
+1. For each target language, the tool compares `en.json` with that locale's file and collects the missing keys
+2. If any already-translated keys have changed English since they were last translated, it asks once whether to re-translate them too
+3. It sends only those keys to the provider you selected
+4. It merges the results into `locales/es.json`, `locales/fr-FR.json`, etc.
+
+See [How It Works](./HOW_IT_WORKS.md#step-5-translation) for details.
 
 ### What languages are supported?
 
 Spanish (es), French (fr-FR), German (de-DE), Japanese (ja-JP), Hausa (ha), Portuguese (pt-BR), Chinese Simplified (zh-CN), Arabic (ar-SA)
+
+Not every provider supports every language — check your provider's language list. If one locale fails, the others still complete.
 
 ### Can I add more languages later?
 
@@ -116,7 +136,11 @@ Yes! Just run the tool again and select additional languages.
 
 ### How much do translations cost?
 
-See [Lingo.dev pricing](https://lingo.dev/pricing). i18n Autopilot only translates **new/missing keys** to save costs.
+It depends on the provider you choose — each has its own pricing (some are free; see the [Providers Guide](./PROVIDERS.md)). i18n Autopilot itself is free, and it only translates **new/missing keys** to keep costs down — changed English is re-translated only if you say yes at the prompt.
+
+### If I change English text in `en.json`, is it re-translated?
+
+You're asked. The tool records the English each translation was made from (in `i18n-autopilot.sources.json` — commit it so your team shares this), and on the next run it asks once: "N English string(s) changed since they were last translated. Re-translate them?" **Yes** (default) re-translates them; **No** keeps the existing translations and asks again next run. Keys translated before upgrading to this version are baselined on the first run, so earlier edits aren't detected — delete such a key from the target locale files to force it. See [Updating Existing Translations](./USAGE.md#updating-existing-translations).
 
 ### Can I edit translations manually?
 
@@ -164,7 +188,7 @@ npx i18n-autopilot@latest
 
 Fixed in v1.0.0. Update to latest version.
 
-### "Lingo.dev CLI not found"
+### "Lingo.dev CLI not found" (Lingo.dev provider)
 
 Install it:
 ```bash
@@ -175,9 +199,15 @@ Or let the tool install it automatically when prompted.
 
 ### "Invalid API key"
 
-1. Check your key at [lingo.dev/settings](https://lingo.dev/settings)
-2. Delete `~/.i18n-autopilot/config.json`
-3. Run tool again and enter correct key
+1. Check or regenerate the key in your provider's dashboard
+2. Remove that provider's entry under `providers` in `~/.i18n-autopilot/config.json` (or delete the file to reset all providers)
+3. Run the tool again and enter the correct key
+
+### "Response key mismatch" / "Failed to parse model response as JSON"
+
+The AI provider (OpenAI or your custom provider) returned output that wasn't valid JSON or didn't contain every key. Nothing is written for that locale. Run again, or (for a custom provider) translate in smaller chunks.
+
+Claude uses structured outputs, so its responses are always valid JSON with every key. If a Claude batch is truncated or the request is declined, that locale fails with a `[claude]` error instead; run again.
 
 ### Strings not being extracted
 
@@ -190,7 +220,7 @@ Make sure they're in supported patterns:
 
 ### Does it work with class components?
 
-**No, only function components are supported.** The tool injects the `useTranslation()` hook, which only works in function components.
+**No, only function components are supported.** The tool injects the `useTranslation()` hook, which only works in function components. Class components are skipped entirely — their strings aren't extracted and the file is left untouched, so it keeps compiling.
 
 If your codebase uses class components, you'll need to:
 1. Convert them to function components (like a modern human), OR
@@ -256,7 +286,7 @@ Bottleneck is translation API calls (network-bound).
 
 ### Why is the second run slow?
 
-Translation API calls. Even if no code changes, translation still runs for selected languages.
+Usually it isn't — locales that already have every key are skipped. If a run is slow, it's translating missing keys; providers that translate one string per request (LibreTranslate, MyMemory) take longer on large batches.
 
 ### Can I skip translation?
 
@@ -330,9 +360,10 @@ Open an issue with:
 
 ## Links
 
-- [Lingo.dev](https://lingo.dev) — AI-powered localization platform
+- [Providers Guide](./PROVIDERS.md) — All supported translation providers
+- [Lingo.dev Setup](./LINGO_SETUP.md) — Lingo.dev account and dashboard settings
 - [react-i18next](https://react.i18next.com) — i18n runtime for React Native
-- [Documentation](./docs/) — Full guides and API reference
+- [Usage Guide](./USAGE.md) and [How It Works](./HOW_IT_WORKS.md) — Full guides
 
 ---
 

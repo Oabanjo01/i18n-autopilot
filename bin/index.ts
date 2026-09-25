@@ -19,8 +19,10 @@ import {
 import { scanProjectSmart } from "../src/scanner";
 import {
   loadTrackingData,
+  loadTranslationSources,
   markFileProcessed,
   saveTrackingData,
+  saveTranslationSources,
 } from "../src/tracker";
 import {
   buildDefaultRegistry,
@@ -28,25 +30,22 @@ import {
   ProviderCredentials,
 } from "../src/providers/registry";
 import {
+  getChangedLocaleKeys,
   getMissingLocaleKeys,
   mergeTranslationsIntoLocaleFile,
-} from "../src/providers/lingo";
+  updateTranslationSources,
+} from "../src/providers/localeFiles";
 import {
   loadCredential,
   saveCredential,
   migrateIfNeeded,
 } from "../src/credentialStore";
 import { ProviderError } from "../src/providers/types";
-import { ClaudeProvider } from "../src/providers/claude";
-import { DeepLProvider } from "../src/providers/deepl";
-import { GoogleProvider } from "../src/providers/google";
-import { OpenAIProvider } from "../src/providers/openai";
-import { AWSProvider } from "../src/providers/aws";
 
 program
   .name("i18n-autopilot")
   .description("Instant i18n for React Native codebases")
-  .version("1.0.1")
+  .version("1.0.2")
   .option("--dry-run", "Preview changes without writing any files")
   .option("--deep", "Enable deep object/array/Map string extraction")
   .parse(process.argv);
@@ -98,39 +97,27 @@ async function main() {
       name: "provider",
       message: "Translation provider:",
       choices: [
-        { name: "Lingo.dev (recommended)", value: "lingo" },
-        { name: "DeepL", value: "deepl" },
+        { name: "Lingo.dev", value: "lingo" },
         { name: "Google Translate", value: "google" },
         { name: "OpenAI (GPT-4o)", value: "openai" },
         { name: "Claude (Anthropic)", value: "claude" },
         { name: "AWS Translate", value: "aws" },
-        { name: "Custom (use your own service)", value: "custom" },
-      ],
-      default: "lingo",
-    },
-    // Custom sub-menu — known services
-    {
-      type: "rawlist",
-      name: "customService",
-      message: "Which service do you want to use?",
-      choices: [
         {
-          name: "LibreTranslate (free, no key needed)",
+          name: "LibreTranslate (free, self-hostable)",
           value: "libretranslate",
         },
         { name: "MyMemory (free, 5k words/day)", value: "mymemory" },
-        { name: "Other (I'll provide my own file)", value: "other" },
+        { name: "Custom (provide your own JS file)", value: "custom" },
       ],
-      when: (ans: any) => ans.provider === "custom",
     },
-    // Custom — LibreTranslate optional URL
+    // LibreTranslate credentials
     {
       type: "input",
       name: "libreTranslateUrl",
       message: "LibreTranslate instance URL (press Enter for public instance):",
       default: "https://libretranslate.com",
       when: (ans: any) =>
-        ans.provider === "custom" && ans.customService === "libretranslate",
+        ans.provider === "libretranslate" && !loadCredential("libretranslate"),
     },
     {
       type: "password",
@@ -139,24 +126,31 @@ async function main() {
         "LibreTranslate API key (press Enter to skip for public instance):",
       mask: "•",
       when: (ans: any) =>
-        ans.provider === "custom" && ans.customService === "libretranslate",
+        ans.provider === "libretranslate" && !loadCredential("libretranslate"),
     },
-    // Custom — MyMemory optional email
+    // MyMemory credentials
     {
       type: "input",
       name: "myMemoryEmail",
       message:
-        "Your email for MyMemory (press Enter to skip, limits to 5k words/day):",
+        "Your email for MyMemory (optional, raises daily limit to 50k words):",
       when: (ans: any) =>
-        ans.provider === "custom" && ans.customService === "mymemory",
+        ans.provider === "mymemory" && !loadCredential("mymemory"),
     },
-    // Custom — Other: file path
+    // Custom — path to a JS file that exports a TranslationProvider
     {
       type: "input",
       name: "customProviderPath",
       message: "Path to your custom provider JS file:",
-      when: (ans: any) =>
-        ans.provider === "custom" && ans.customService === "other",
+      when: (ans: any) => ans.provider === "custom",
+      validate: (input: string) => {
+        const trimmed = input.trim();
+        if (!trimmed) return "Enter the path to a JS file that exports your provider.";
+        if (!fs.existsSync(path.resolve(trimmed)))
+          return `No file found at ${path.resolve(trimmed)}`;
+        return true;
+      },
+      filter: (input: string) => input.trim(),
     },
     // Lingo.dev API key
     {
@@ -167,18 +161,6 @@ async function main() {
       when: (ans: any) => {
         if (ans.provider !== "lingo") return false;
         const saved = loadCredential("lingo");
-        return !saved?.apiKey;
-      },
-    },
-    // DeepL API key
-    {
-      type: "password",
-      name: "deeplApiKey",
-      message: "DeepL API key:",
-      mask: "•",
-      when: (ans: any) => {
-        if (ans.provider !== "deepl") return false;
-        const saved = loadCredential("deepl");
         return !saved?.apiKey;
       },
     },
@@ -262,12 +244,6 @@ async function main() {
     if (answers.lingoApiKey)
       saveCredential("lingo", { apiKey: answers.lingoApiKey });
     credentials.lingo = { apiKey };
-  } else if (answers.provider === "deepl") {
-    const saved = loadCredential("deepl");
-    const apiKey = saved?.apiKey || answers.deeplApiKey;
-    if (answers.deeplApiKey)
-      saveCredential("deepl", { apiKey: answers.deeplApiKey });
-    credentials.deepl = { apiKey };
   } else if (answers.provider === "google") {
     const saved = loadCredential("google");
     const apiKey = saved?.apiKey || answers.googleApiKey;
@@ -296,66 +272,18 @@ async function main() {
       saveCredential("aws", { accessKeyId, secretAccessKey, region });
     }
     credentials.aws = { accessKeyId, secretAccessKey, region };
-  }
-
-  // Handle custom provider — build and test before proceeding
-  let customProvider: any = null;
-  if (answers.provider === "custom") {
-    if (answers.customService === "libretranslate") {
-      const { LibreTranslateProvider } =
-        await import("../src/providers/libretranslate");
-      customProvider = new LibreTranslateProvider(
-        answers.libreTranslateUrl || "https://libretranslate.com",
-        answers.libreTranslateApiKey || "",
-      );
-    } else if (answers.customService === "mymemory") {
-      const { MyMemoryProvider } = await import("../src/providers/mymemory");
-      customProvider = new MyMemoryProvider(answers.myMemoryEmail || "");
-    } else if (answers.customService === "other") {
-      // Load from file path — existing flow
-    }
-
-    // Test the custom provider before proceeding
-    if (customProvider) {
-      const testSpinner = ora(
-        `Testing ${customProvider.name} connection...`,
-      ).start();
-      try {
-        const testResult = await customProvider.translate(
-          { test: "Hello" },
-          "en",
-          "es",
-        );
-        if (testResult && typeof testResult.test === "string") {
-          testSpinner.succeed(
-            `${customProvider.name} connection verified ✔  ("Hello" → "${testResult.test}")`,
-          );
-          saveCredential(
-            customProvider.name,
-            answers.customService === "libretranslate"
-              ? {
-                  url:
-                    answers.libreTranslateUrl || "https://libretranslate.com",
-                  apiKey: answers.libreTranslateApiKey || "",
-                }
-              : { email: answers.myMemoryEmail || "" },
-          );
-        } else {
-          testSpinner.fail(
-            `${customProvider.name} returned an unexpected response`,
-          );
-          process.exit(1);
-        }
-      } catch (err: any) {
-        testSpinner.fail(`${customProvider.name} test failed: ${err.message}`);
-        log(
-          chalk.yellow(
-            "\n  Check your credentials or endpoint and try again.\n",
-          ),
-        );
-        process.exit(1);
-      }
-    }
+  } else if (answers.provider === "libretranslate") {
+    const saved = loadCredential("libretranslate");
+    const url =
+      saved?.url || answers.libreTranslateUrl || "https://libretranslate.com";
+    const apiKey = saved?.apiKey ?? answers.libreTranslateApiKey ?? "";
+    if (!saved) saveCredential("libretranslate", { url, apiKey });
+    credentials.libretranslate = { url, apiKey };
+  } else if (answers.provider === "mymemory") {
+    const saved = loadCredential("mymemory");
+    const email = saved?.email ?? answers.myMemoryEmail ?? "";
+    if (!saved) saveCredential("mymemory", { email });
+    credentials.mymemory = { email };
   }
 
   // Build the final list of Text component names to look for
@@ -445,7 +373,20 @@ async function main() {
 
     // Step 3 — Generate keys
     const keySpinner = ora("Generating keys...").start();
-    keyed = generateKeys(extracted);
+    const existingEnPath = path.join(
+      path.resolve(answers.projectPath),
+      "locales",
+      "en.json",
+    );
+    let existingEn: Record<string, string> = {};
+    try {
+      if (fs.existsSync(existingEnPath)) {
+        existingEn = JSON.parse(fs.readFileSync(existingEnPath, "utf-8"));
+      }
+    } catch {
+      // buildLocaleFile warns about an unparseable en.json below
+    }
+    keyed = generateKeys(extracted, existingEn);
     keySpinner.succeed(`Generated ${keyed.length} keys`);
 
     // Step 4 — Build locale file (with merge logic) only if there are new keys
@@ -503,17 +444,11 @@ async function main() {
     const registry = buildDefaultRegistry(credentials);
     let provider;
     try {
-      if (customProvider) {
-        // Custom known service — already tested, register directly
-        registry.register(customProvider);
-        provider = customProvider;
-      } else {
-        provider = await resolveProvider(
-          registry,
-          answers.provider,
-          answers.customProviderPath,
-        );
-      }
+      provider = await resolveProvider(
+        registry,
+        answers.provider,
+        answers.customProviderPath,
+      );
     } catch (err: any) {
       log(chalk.red(`\n  ✘ Failed to load provider: ${err.message}`));
       process.exit(1);
@@ -533,23 +468,74 @@ async function main() {
         fs.readFileSync(enPath, "utf-8"),
       );
 
+      const sources = loadTranslationSources(answers.projectPath);
+
+      const changedByLocale: Record<string, Record<string, string>> = {};
       for (const locale of answers.locales) {
-        const missingKeys = getMissingLocaleKeys(
+        changedByLocale[locale] = getChangedLocaleKeys(
           answers.projectPath,
           locale,
           enMap,
+          sources[locale],
         );
+      }
+      const changedKeyCount = new Set(
+        Object.values(changedByLocale).flatMap((c) => Object.keys(c)),
+      ).size;
 
-        if (!missingKeys) {
-          log(chalk.gray(`  ⏭  ${locale} — up to date, skipping`));
+      let retranslateChanged = false;
+      if (changedKeyCount > 0 && !options.dryRun) {
+        const { retranslate } = await (inquirer.prompt as any)([
+          {
+            type: "confirm",
+            name: "retranslate",
+            message: `${changedKeyCount} English string(s) changed since they were last translated. Re-translate them? (No keeps the existing translations and saves tokens; you'll be asked again next run.)`,
+            default: true,
+          },
+        ]);
+        retranslateChanged = retranslate;
+      }
+
+      for (const locale of answers.locales) {
+        const missingKeys =
+          getMissingLocaleKeys(answers.projectPath, locale, enMap) ?? {};
+        const changedKeys = changedByLocale[locale];
+        const missingCount = Object.keys(missingKeys).length;
+        const changedCount = Object.keys(changedKeys).length;
+        const toTranslate = retranslateChanged
+          ? { ...missingKeys, ...changedKeys }
+          : missingKeys;
+        const toTranslateCount = Object.keys(toTranslate).length;
+
+        if (options.dryRun) {
+          if (missingCount === 0 && changedCount === 0) {
+            log(chalk.gray(`  ⏭  ${locale} — up to date, skipping`));
+          } else {
+            log(
+              chalk.gray(
+                `  Dry run — would translate ${missingCount} new key(s)` +
+                  (changedCount > 0
+                    ? ` and ask about ${changedCount} changed key(s)`
+                    : "") +
+                  ` via ${provider.name} for ${locale}`,
+              ),
+            );
+          }
           continue;
         }
 
-        if (options.dryRun) {
-          log(
-            chalk.gray(
-              `  Dry run — would translate ${Object.keys(missingKeys).length} key(s) via ${provider.name} for ${locale}`,
-            ),
+        if (toTranslateCount === 0) {
+          const note =
+            changedCount > 0
+              ? `${changedCount} changed key(s) kept as-is`
+              : "up to date";
+          log(chalk.gray(`  ⏭  ${locale} — ${note}, skipping`));
+          sources[locale] = updateTranslationSources(
+            answers.projectPath,
+            locale,
+            enMap,
+            sources[locale],
+            [],
           );
           continue;
         }
@@ -561,15 +547,19 @@ async function main() {
             `${locale}.json`,
           ),
         );
+        const changedNote =
+          retranslateChanged && changedCount > 0
+            ? ` (${changedCount} re-translated)`
+            : "";
         log(
           chalk.gray(
-            `  ${isNew ? "🆕" : "➕"} ${locale} — translating ${Object.keys(missingKeys).length} key(s)`,
+            `  ${isNew ? "🆕" : "➕"} ${locale} — translating ${toTranslateCount} key(s)${changedNote}`,
           ),
         );
 
         try {
           const translated = await provider.translate(
-            missingKeys,
+            toTranslate,
             "en",
             locale,
           );
@@ -578,11 +568,20 @@ async function main() {
             locale,
             translated,
           );
+          sources[locale] = updateTranslationSources(
+            answers.projectPath,
+            locale,
+            enMap,
+            sources[locale],
+            Object.keys(translated),
+          );
           log(chalk.green(`  ✔ ${locale} — done`));
         } catch (err: any) {
           log(chalk.red(`  ✘ ${locale} (${provider.name}) — ${err.message}`));
         }
       }
+
+      saveTranslationSources(answers.projectPath, sources, options.dryRun);
     }
   }
 
@@ -610,8 +609,9 @@ async function main() {
     );
 
     // Step 6b — Deep rewrite (only in deep mode)
+    let deepRewriteResults: typeof rewriteResults = [];
     if (options.deep) {
-      const deepRewriteResults = rewriteDeepFiles({
+      deepRewriteResults = rewriteDeepFiles({
         projectPath: answers.projectPath,
         extracted: keyed,
         textComponents,
@@ -628,16 +628,21 @@ async function main() {
       }
     }
 
+    // Files that failed to parse stay unmarked so the next run retries them.
+    const failedFiles = new Set(
+      [...rewriteResults, ...deepRewriteResults]
+        .filter((r) => r.reason?.startsWith("Parse error"))
+        .map((r) => r.filePath),
+    );
     const trackingData = loadTrackingData(answers.projectPath);
-    rewriteResults.forEach((result) => {
-      if (result.modified) {
-        const fileKeys = keyed
-          .filter((k) => k.filePath === result.filePath)
-          .map((k) => k.key);
-        const fileContent = fs.readFileSync(result.filePath, "utf-8");
-        markFileProcessed(trackingData, result.filePath, fileContent, fileKeys);
-      }
-    });
+    for (const file of filesToProcess) {
+      if (failedFiles.has(file.filePath)) continue;
+      const fileKeys = keyed
+        .filter((k) => k.filePath === file.filePath)
+        .map((k) => k.key);
+      const fileContent = fs.readFileSync(file.filePath, "utf-8");
+      markFileProcessed(trackingData, file.filePath, fileContent, fileKeys);
+    }
     saveTrackingData(answers.projectPath, trackingData, options.dryRun);
 
     const filesWithStrings = [...new Set(keyed.map((e: any) => e.filePath))];
@@ -647,10 +652,11 @@ async function main() {
           `\n  Files processed in this run: ${filesWithStrings.length}`,
         ),
       );
+      const absProjectPath = path.resolve(answers.projectPath);
       filesWithStrings.forEach((f) => {
         const count = keyed.filter((e: any) => e.filePath === f).length;
-        const relativePath = f.replace(answers.projectPath, ".");
-        log(chalk.gray(`  ${count} strings — ${relativePath}`));
+        const relativePath = path.relative(absProjectPath, f);
+        log(chalk.gray(`  ${count} strings — ./${relativePath}`));
       });
     }
   }

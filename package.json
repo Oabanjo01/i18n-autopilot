@@ -2,7 +2,7 @@
   "name": "i18n-autopilot",
   "version": "1.0.2",
   "license": "MIT",
-  "description": "Instant i18n for React Native codebases — powered by Lingo.dev",
+  "description": "Instant i18n for React Native codebases — extract strings, rewrite to t(), and translate with Lingo.dev, Google, OpenAI, Claude, AWS, LibreTranslate, MyMemory, or your own AI",
   "main": "dist/bin/index.js",
   "bin": {
     "i18n-autopilot": "dist/bin/index.js"
@@ -27,7 +27,7 @@
     "checklog": "cat /tmp/i18n-autopilot.log",
     "watchlogs": "tail -f ~/.i18n-autopilot/run.log",
     "test": "vitest run",
-    "self-test": "echo 'Just grab this path: tests/fixtures/deep-analyzer-sample/' && npx ts-node bin/index.ts --deep"
+    "self-test": "node scripts/self-test.cjs --deep"
   },
   "files": [
     "dist",
@@ -44,12 +44,19 @@
     "translation",
     "localization",
     "lingo",
+    "google-translate",
+    "openai",
+    "claude",
+    "aws-translate",
+    "libretranslate",
+    "ai-translation",
     "automation",
     "cli",
     "expo",
     "mobile"
   ],
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.128.0",
     "@aws-sdk/client-translate": "3.1053.0",
     "@babel/generator": "^7.29.1",
     "@babel/parser": "^7.29.0",
