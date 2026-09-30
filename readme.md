@@ -1,5 +1,6 @@
 # i18n Autopilot
 
+We moved from Lingo as a primary provider!
 Instant i18n for React Native codebases.
 
 i18n Autopilot scans your React Native project, extracts hardcoded user-facing
