@@ -44,7 +44,7 @@ const { t } = useTranslation();
 
 ## Quick Start
 
-Requires Node.js 18+.
+Requires Node.js 22.13 or later (Node 22 or 24 LTS).
 
 ```bash
 # Commit your work first — this tool rewrites source files

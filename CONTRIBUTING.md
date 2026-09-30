@@ -13,7 +13,7 @@ and docs fixes are all welcome.
 
 ## Getting set up
 
-Requires Node.js 18+ and Yarn 1.
+Requires Node.js 22.13+ and Yarn 1. CI tests Node 22.13.0, the latest Node 22 and Node 24.
 
 ```bash
 git clone https://github.com/Oabanjo01/i18n-autopilot.git

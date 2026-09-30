@@ -287,7 +287,7 @@ This matches the `TranslationProvider` interface in
 - Use plain CommonJS (`module.exports`, `require`). If your project's
   `package.json` has `"type": "module"`, name the file with a `.cjs` extension
 - Keep secrets in environment variables your file reads, not hard-coded in it
-- Node 18+ provides a global `fetch`, so no dependencies are needed for HTTP
+- Node 22+ provides a global `fetch`, so no dependencies are needed for HTTP
 
 ### Example: Local AI with Ollama
 

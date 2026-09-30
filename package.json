@@ -1,6 +1,6 @@
 {
   "name": "i18n-autopilot",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "license": "MIT",
   "description": "Instant i18n for React Native codebases — extract strings, rewrite to t(), and translate with Lingo.dev, Google, OpenAI, Claude, AWS, LibreTranslate, MyMemory, or your own AI",
   "main": "dist/bin/index.js",
@@ -57,27 +57,27 @@
   ],
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",
-    "@aws-sdk/client-translate": "3.1053.0",
+    "@aws-sdk/client-translate": "3.1141.0",
     "@babel/generator": "^7.29.1",
-    "@babel/parser": "^7.29.0",
+    "@babel/parser": "^7.29.9",
     "@babel/traverse": "^7.29.0",
-    "@babel/types": "^7.29.0",
+    "@babel/types": "^7.29.8",
     "chalk": "^5.6.2",
-    "commander": "^14.0.3",
-    "inquirer": "^13.3.0",
-    "ora": "^9.3.0"
+    "commander": "^15.0.0",
+    "inquirer": "^14.2.2",
+    "ora": "^9.4.1"
   },
   "devDependencies": {
     "@types/babel__generator": "^7.27.0",
     "@types/babel__traverse": "^7.28.0",
-    "@types/node": "^25.5.0",
-    "fast-check": "4.8.0",
+    "@types/node": "^26.6.3",
+    "fast-check": "4.10.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
     "vitest": "3.2.4"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.13.0"
   },
   "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
 }
