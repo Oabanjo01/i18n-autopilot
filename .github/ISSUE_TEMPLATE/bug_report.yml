@@ -1,0 +1,62 @@
+name: Bug report
+description: Something extracted, rewrote or translated incorrectly, or the CLI failed
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! A small code sample that reproduces the problem is the most useful thing you can include.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `npx i18n-autopilot --version`
+      placeholder: "1.1.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Translation provider
+      options:
+        - Lingo.dev
+        - Google Translate
+        - OpenAI
+        - Claude
+        - AWS Translate
+        - LibreTranslate
+        - MyMemory
+        - Custom provider file
+        - Not relevant (extraction/rewriting problem)
+    validations:
+      required: true
+  - type: input
+    id: flags
+    attributes:
+      label: Flags used
+      placeholder: "--deep --dry-run"
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Include the CLI output or error if there was one.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: sample
+    attributes:
+      label: Code sample
+      description: The component or file involved, before running the tool (and after, if it was rewritten incorrectly).
+      render: tsx
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Node version, OS, Expo or bare React Native
+      placeholder: "Node 22, macOS 15, Expo SDK 52"

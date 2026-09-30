@@ -1,6 +1,6 @@
 {
   "name": "i18n-autopilot",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "license": "MIT",
   "description": "Instant i18n for React Native codebases — extract strings, rewrite to t(), and translate with Lingo.dev, Google, OpenAI, Claude, AWS, LibreTranslate, MyMemory, or your own AI",
   "main": "dist/bin/index.js",

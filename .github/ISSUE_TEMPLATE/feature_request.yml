@@ -1,0 +1,31 @@
+name: Feature request
+description: Suggest a new capability or an improvement
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check the [roadmap-related issues](https://github.com/Oabanjo01/i18n-autopilot/issues?q=label%3Aenhancement) first — it may already be planned.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe what you're trying to do and what gets in the way today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: example
+    attributes:
+      label: Example
+      description: A code sample showing the input and the output you'd expect, if relevant.
+      render: tsx
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives or workarounds you've tried

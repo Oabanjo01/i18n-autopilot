@@ -1,6 +1,9 @@
 # i18n Autopilot
 
-We moved from Lingo as a primary provider!
+[![npm version](https://img.shields.io/npm/v/i18n-autopilot.svg)](https://www.npmjs.com/package/i18n-autopilot)
+[![CI](https://github.com/Oabanjo01/i18n-autopilot/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/Oabanjo01/i18n-autopilot/actions/workflows/release.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE.md)
+
 Instant i18n for React Native codebases.
 
 i18n Autopilot scans your React Native project, extracts hardcoded user-facing
@@ -34,6 +37,8 @@ const { t } = useTranslation();
 - **Pluggable translation** — Lingo.dev, Google, OpenAI, Claude, AWS,
   LibreTranslate, MyMemory, or a custom JS file
 - **Dry run** (`--dry-run`) — preview everything before writing files
+- **Coverage check** (`--check`) — reports missing, outdated and stale
+  translations without prompting, and exits non-zero so CI can fail on it
 
 ---
 
@@ -73,6 +78,10 @@ Japanese (`ja-JP`), Hausa (`ha`), Portuguese (`pt-BR`), Chinese Simplified
 |------|-------------|
 | `--dry-run` | Preview changes without writing any files |
 | `--deep` | Enable deep object/array/Map string extraction |
+| `--check` | Report translation coverage without prompting; exits 1 if anything is missing, outdated or stale |
+| `--project <path>` | Project to check (with `--check`; default `.`) |
+| `--locales <codes>` | Comma-separated locales to check (with `--check`; default: every `locales/*.json`) |
+| `--json` | Print the `--check` report as JSON |
 
 ---
 
@@ -181,7 +190,13 @@ MIT
 
 ---
 
-[![npm version](https://badge.fury.io/js/i18n-autopilot.svg)](https://www.npmjs.com/package/i18n-autopilot)
 [![npm downloads](https://img.shields.io/npm/dm/i18n-autopilot.svg)](https://www.npmjs.com/package/i18n-autopilot)
+
+## Contributing
+
+Bug reports, new providers and parser edge cases are welcome — see
+[CONTRIBUTING.md](./CONTRIBUTING.md). Please report security issues privately
+as described in [SECURITY.md](./SECURITY.md). This project follows a
+[Code of Conduct](./CODE_OF_CONDUCT.md).
 
 **Need help?** Open an issue on [GitHub](https://github.com/Oabanjo01/i18n-autopilot/issues).

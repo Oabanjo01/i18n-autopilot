@@ -1,0 +1,16 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    # Group routine updates into one PR a week instead of one per package.
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
