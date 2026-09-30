@@ -1,6 +1,8 @@
 # Lingo.dev Setup Guide
 
-i18n Autopilot uses [Lingo.dev](https://lingo.dev) for AI-powered translations. Here's how to get started.
+[Lingo.dev](https://lingo.dev) is one of the translation providers you can choose in i18n Autopilot. It offers AI-powered translations with brand voice, glossary, and translation memory. This guide covers setting it up.
+
+Using a different service? See the [Providers Guide](./PROVIDERS.md) for every supported option, including how to bring your own AI.
 
 ---
 
@@ -25,12 +27,13 @@ i18n Autopilot uses [Lingo.dev](https://lingo.dev) for AI-powered translations. 
 
 ## 3. First Run
 
-When you run `npx i18n-autopilot` for the first time, you'll be prompted:
+Run `npx i18n-autopilot` and choose **Lingo.dev** at the provider prompt:
 ```
+? Translation provider: 1) Lingo.dev
 ? Lingo.dev API key: ••••••••••••••••••••
 ```
 
-Paste your key and press Enter. It's saved locally and reused for all future runs.
+Paste your key and press Enter. It's saved locally under the `lingo` entry in `~/.i18n-autopilot/config.json` and reused whenever you pick Lingo.dev again.
 
 ---
 
@@ -67,6 +70,8 @@ Verify installation:
 lingo --version
 ```
 
+**How it's used:** for each target language, i18n Autopilot writes the keys to translate to a temporary directory, runs `lingo run --target-locale <locale>` there with your key, then merges the output into your project's `locales/<locale>.json`. The temporary directory is deleted afterwards — no Lingo.dev config files are left in your project.
+
 ---
 
 ## Pricing
@@ -92,17 +97,13 @@ npm install -g lingo.dev
 ```
 
 ### Change API key
-Delete the config file and run the tool again:
-```bash
-rm ~/.i18n-autopilot/config.json
-npx i18n-autopilot
-```
+Remove the `lingo` entry under `providers` in `~/.i18n-autopilot/config.json` and run the tool again. (Deleting the whole file also works, but clears saved credentials for every provider.)
 
 ---
 
 ## Security Best Practices
 
-✅ **DO:** Store API key in `~/.i18n-autopilot/config.json` (tool does this automatically)  
+✅ **DO:** Let the tool store your API key in `~/.i18n-autopilot/config.json` (it does this automatically)  
 ✅ **DO:** Add `.i18n-autopilot.json` to `.gitignore`  
 ❌ **DON'T:** Commit API keys to version control  
 ❌ **DON'T:** Share API keys in screenshots or logs  
@@ -111,6 +112,7 @@ npx i18n-autopilot
 
 ## Next Steps
 
+- [Providers Guide](./PROVIDERS.md) — Compare and set up other providers
 - [How It Works](./HOW_IT_WORKS.md) — Understand the translation pipeline
 - [Usage Guide](./USAGE.md) — Learn workflows and best practices
 - [FAQ](./FAQ.md) — Common questions

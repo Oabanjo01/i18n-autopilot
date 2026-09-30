@@ -22,20 +22,29 @@ function toKey(value: string): string {
   return words.join("_") || "string";
 }
 
-export function generateKeys(extracted: ExtractedString[]): ExtractedString[] {
-  const keyCounts = new Map<string, number>();
+/**
+ * Assigns a key to every extracted string. Identical English shares one key.
+ * A key already taken — in `existing` (the current en.json) or earlier in this
+ * run — by different English is never reused; the next free `_2`, `_3`, …
+ * suffix is used instead, so strings are never overwritten or silently shared.
+ */
+export function generateKeys(
+  extracted: ExtractedString[],
+  existing: Record<string, string> = {},
+): ExtractedString[] {
+  const assigned = new Map<string, string>(Object.entries(existing));
 
   return extracted.map((item) => {
-    let key = toKey(item.value);
+    const base = toKey(item.value);
+    let key = base;
+    let n = 1;
 
-    if (keyCounts.has(key)) {
-      const count = keyCounts.get(key)! + 1;
-      keyCounts.set(key, count);
-      key = `${key}_${count}`;
-    } else {
-      keyCounts.set(key, 1);
+    while (assigned.has(key) && assigned.get(key) !== item.value) {
+      n++;
+      key = `${base}_${n}`;
     }
 
+    assigned.set(key, item.value);
     return { ...item, key };
   });
 }

@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  # "test" is the required status check on main — keep the job name in sync
+  # with the branch ruleset if you rename it.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: yarn
+
+      - run: yarn install --frozen-lockfile
+
+      - name: Type-check
+        run: npx tsc --noEmit -p .
+
+      - name: Unit and end-to-end tests
+        run: yarn test
+
+      - name: Deep rewriter regression
+        run: npx ts-node tests/deep-rewriter.test.ts
+
+      - name: Build
+        run: yarn build

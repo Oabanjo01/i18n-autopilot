@@ -26,7 +26,7 @@ data such as routes or JSX keys.
 └──────┬──────┘
        │
 ┌──────▼──────┐
-│ 5. Translate│ Call Lingo.dev API
+│ 5. Translate│ Send missing (and, if you agree, changed) keys to your provider
 └──────┬──────┘
        │
 ┌──────▼──────┐
@@ -169,35 +169,93 @@ Creates or updates `locales/en.json`:
 
 ---
 
-## Step 5: AI Translation
+## Step 5: Translation
 
-**Module:** `lingoRunner.ts`
+**Modules:** `providers/types.ts`, `providers/registry.ts`,
+`providers/localeFiles.ts`, and one adapter per provider in `providers/`
+
+Translation is provider-agnostic. Every service is wrapped in an adapter that
+implements the same interface:
+
+```ts
+interface TranslationProvider {
+  readonly name: string;
+  translate(
+    data: Record<string, string>, // missing keys (+ changed keys, if chosen)
+    sourceLocale: string,         // always "en"
+    targetLocale: string,         // e.g. "es", "fr-FR"
+  ): Promise<Record<string, string>>; // same keys, translated values
+}
+```
+
+**Provider selection:**
+- The provider you pick at the prompt is resolved from a **registry**
+  (`registry.ts`), built from the credentials you entered or saved in
+  `~/.i18n-autopilot/config.json`
+- Built-in adapters: `lingo`, `google`, `openai`, `claude`, `aws`,
+  `libretranslate`, `mymemory`
+- **Custom:** your JS file is loaded with `require()`, checked for a string
+  `name` and a `translate` function, and registered under its own name. The
+  path prompt rejects an empty path or a file that doesn't exist
+
+**Changed English:** after each successful translation, the English text each
+key was translated from is recorded per locale in `i18n-autopilot.sources.json`
+at the project root (`tracker.ts`). It's kept separate from
+`.i18n-autopilot.json` (which stores machine-specific absolute paths) so it
+can be committed and shared by a team. Before translating, the CLI compares
+those records with the current `en.json` (`getChangedLocaleKeys`). If any keys
+changed (and it isn't a dry run), it asks once: *"N English string(s) changed
+since they were last translated. Re-translate them?"* (default Yes). Answering
+No keeps the existing translations and leaves the keys flagged for next run.
+Keys with no recorded source (translated before this tracking existed) are
+baselined to their current English.
 
 For each target language:
 
-1. **Check for missing keys**
-   - Compare `en.json` with `es.json` (for example)
-   - Extract only keys that don't exist in `es.json`
+1. **Diff** (`localeFiles.ts`)
+   - Compare `en.json` with `es.json` (for example) by key
+   - Extract keys that don't exist in `es.json`, plus changed keys if you
+     chose to re-translate them
+   - If there's nothing to translate, skip the locale
+     (`⏭  es — up to date, skipping`)
 
-2. **Create temp directory**
-   - Copy missing keys to `/tmp/lingo-run-{timestamp}/locales/en.json`
-   - Write Lingo.dev config (`i18n.json`)
+2. **Translate**
+   - Call `provider.translate(keysToTranslate, "en", "es")`
+   - The adapter handles its own API format, locale-code mapping, and
+     batching (one request per locale, or one per string, depending on the
+     service)
 
-3. **Run Lingo.dev CLI**
+3. **Merge** (`localeFiles.ts`)
+   - Merge the returned keys into the project's `locales/es.json`
+   - Create the file if it doesn't exist
+   - Preserve existing translations
+   - Record the English each returned key was translated from
+
+If a provider throws for one locale, the error is logged and the loop moves on
+to the next locale.
+
+**Incremental behavior:** Only translates missing keys — and changed keys when
+you say yes — saving API costs.
+
+### Example Adapter: Lingo.dev
+
+The Lingo.dev adapter (`providers/lingo.ts`) wraps the Lingo.dev CLI rather
+than calling an HTTP API:
+
+1. Write the keys to translate to `<tmp>/lingo-run-{timestamp}/locales/en.json`
+2. Write a Lingo.dev config (`i18n.json`) in that temp directory
+3. Run the CLI there:
 ```bash
    lingo run --target-locale es
 ```
+4. Read the generated `es.json` from the temp directory and return it
+5. Delete the temp directory
 
-4. **Merge translations**
-   - Read generated `es.json` from temp directory
-   - Merge into project's `locales/es.json`
-   - Preserve existing translations
+Other adapters (Google, OpenAI, Claude, AWS, LibreTranslate, MyMemory)
+call their service's API directly. See the [Providers Guide](./PROVIDERS.md)
+for details and limitations of each.
 
-5. **Cleanup**
-   - Delete temp directory
-   - Remove `i18n.json` and `i18n.lock` from project
-
-**Incremental behavior:** Only translates missing keys, saving API costs.
+*(`lingoRunner.ts` is a legacy compatibility shim; the CLI no longer uses it.)*
 
 ---
 
@@ -279,6 +337,17 @@ Updates `.i18n-autopilot.json`:
 }
 ```
 
+Translation sources are written to `i18n-autopilot.sources.json` (sorted, so
+diffs stay small):
+```json
+{
+  "es": { "sign": "Sign In", "welcome_back": "Welcome back" }
+}
+```
+
+It records, per locale, the English text each key was translated from; it's
+how changed English is detected (see Step 5).
+
 **On next run:**
 - Recompute hash of each file
 - Compare with stored hash
@@ -324,9 +393,12 @@ Updates `.i18n-autopilot.json`:
 - Medium app (100 files): ~30 seconds
 - Large app (500 files): ~2 minutes
 
-**Bottleneck:** Translation API calls (network-bound)
+**Bottleneck:** Translation API calls (network-bound). Providers that
+translate one string per request (LibreTranslate, MyMemory) are slower on
+large batches than those that send a whole locale at once.
 
-**Optimization:** Incremental translation only sends missing keys
+**Optimization:** Incremental translation only sends missing keys (and changed
+keys, if you choose to re-translate them)
 
 ---
 
@@ -359,11 +431,23 @@ export default class Home extends React.Component {
 
 **Why?** The tool injects the `useTranslation()` hook, which is only compatible with function components. Class components would require wrapping with the `withTranslation()` HOC, which is a different AST transformation pattern.
 
+The tool skips class components: their strings aren't extracted and the file
+is left unchanged. The same applies to text outside any function component or
+hook (module scope, plain helper functions), because there's nowhere to call
+`useTranslation()` from.
+
 **Workaround:** Convert class components to function components before running the tool, or manually add `withTranslation()` HOC after running.
+
+**What counts as a component:** a function whose name starts with a capital
+letter (including ones wrapped in `memo`/`forwardRef` or exported as the
+default), or a hook whose name starts with `use`. Implicit-return arrow
+components like `const Empty = () => <Text>…</Text>` are converted to a block
+body so the hook can be added.
 
 ---
 
 ## Next Steps
 
 - [Usage Guide](./USAGE.md) — Learn workflows and best practices
+- [Providers Guide](./PROVIDERS.md) — Set up a provider or write your own
 - [FAQ](./FAQ.md) — Common questions and troubleshooting

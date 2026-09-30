@@ -35,3 +35,6 @@ Thumbs.db
 
 # Roadmap
 ROADMAP.md
+
+# Manual test sandbox (yarn self-test)
+.self-test/

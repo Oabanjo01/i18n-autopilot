@@ -9,10 +9,15 @@
 import fs from "fs";
 import path from "path";
 import * as babelParser from "@babel/parser";
-import traverse from "@babel/traverse";
+import traverse, { NodePath } from "@babel/traverse";
 import * as t from "@babel/types";
 import generate from "@babel/generator";
 import { ExtractedString } from "./parser";
+import {
+  ensureBlockBody,
+  findComponentFunction,
+  readJSXText,
+} from "./astHelpers";
 
 import { execSync } from "child_process";
 import chalk from "chalk";
@@ -95,10 +100,21 @@ function addUseTranslationImport(ast: t.File): void {
   );
 
   // Insert after the last existing import
-  let lastImportIndex = 0;
+  let lastImportIndex = -1;
   ast.program.body.forEach((node, index) => {
     if (t.isImportDeclaration(node)) lastImportIndex = index;
   });
+
+  // Babel also records a comment that sits below the last import as that
+  // import's trailing comment; keep only same-line ones so the comment stays
+  // attached to the code it describes instead of landing above the new import.
+  const lastImport = ast.program.body[lastImportIndex];
+  if (lastImport?.trailingComments && lastImport.loc) {
+    const importEndLine = lastImport.loc.end.line;
+    lastImport.trailingComments = lastImport.trailingComments.filter(
+      (c) => c.loc?.start.line === importEndLine,
+    );
+  }
 
   ast.program.body.splice(lastImportIndex + 1, 0, importDeclaration);
 }
@@ -152,7 +168,7 @@ function rewriteComponentFile(
   });
 
   let modified = false;
-  const functionsNeedingHook = new Set<t.BlockStatement>();
+  const functionsNeedingHook = new Set<t.Function>();
 
   traverse(ast, {
     JSXElement(path) {
@@ -162,20 +178,30 @@ function rewriteComponentFile(
       const isTextComponent = textComponents.includes(openingEl.name.name);
       if (!isTextComponent) return;
 
-      for (let i = 0; i < path.node.children.length; i++) {
-        const child = path.node.children[i];
+      const component = findComponentFunction(path);
+      if (!component) return;
+
+      const children = path.node.children;
+      for (let i = 0; i < children.length; i++) {
+        const child = children[i];
 
         // <Text>Hello world</Text>
         if (t.isJSXText(child)) {
-          const value = child.value.trim();
-          const key = fileValueMap.get(value);
-          if (!key) continue;
+          const text = readJSXText(child);
+          const key = text && fileValueMap.get(text.value);
+          if (!text || !key) continue;
 
-          path.node.children[i] = t.jsxExpressionContainer(buildTCall(key));
+          // Keep the spaces React would have rendered next to sibling elements.
+          const replacement: t.JSXElement["children"] = [
+            ...(text.leadingSpace ? [t.jsxText(" ")] : []),
+            t.jsxExpressionContainer(buildTCall(key)),
+            ...(text.trailingSpace ? [t.jsxText(" ")] : []),
+          ];
+          children.splice(i, 1, ...replacement);
+          i += replacement.length - 1;
           modified = true;
-
-          const funcBody = findEnclosingFunctionBody(path);
-          if (funcBody) functionsNeedingHook.add(funcBody);
+          functionsNeedingHook.add(component.node);
+          continue;
         }
 
         // <Text>{'Hello world'}</Text>
@@ -189,9 +215,7 @@ function rewriteComponentFile(
 
           child.expression = buildTCall(key);
           modified = true;
-
-          const funcBody = findEnclosingFunctionBody(path);
-          if (funcBody) functionsNeedingHook.add(funcBody);
+          functionsNeedingHook.add(component.node);
         }
 
         // <Text>{`Hello world`}</Text>
@@ -206,9 +230,7 @@ function rewriteComponentFile(
 
           child.expression = buildTCall(key);
           modified = true;
-
-          const funcBody = findEnclosingFunctionBody(path);
-          if (funcBody) functionsNeedingHook.add(funcBody);
+          functionsNeedingHook.add(component.node);
         }
       }
     },
@@ -216,11 +238,7 @@ function rewriteComponentFile(
 
   if (!modified) return null;
 
-  for (const funcBody of functionsNeedingHook) {
-    if (!hasUseTranslationHook(funcBody)) {
-      injectUseTranslationHook(funcBody);
-    }
-  }
+  injectHooks(functionsNeedingHook);
 
   if (!hasUseTranslationImport(ast)) {
     addUseTranslationImport(ast);
@@ -241,7 +259,7 @@ function rewriteHookFile(
   });
 
   let modified = false;
-  const functionsNeedingHook = new Set<t.BlockStatement>();
+  const functionsNeedingHook = new Set<t.Function>();
 
   traverse(ast, {
     CallExpression(path) {
@@ -255,22 +273,19 @@ function rewriteHookFile(
       const key = valueKeyMap.get(value);
       if (!key) return;
 
+      const component = findComponentFunction(path);
+      if (!component) return;
+
       // Replace useState("string") with useState(t('key'))
       path.node.arguments[0] = buildTCall(key);
       modified = true;
-
-      const funcBody = findEnclosingFunctionBody(path);
-      if (funcBody) functionsNeedingHook.add(funcBody);
+      functionsNeedingHook.add(component.node);
     },
   });
 
   if (!modified) return null;
 
-  for (const funcBody of functionsNeedingHook) {
-    if (!hasUseTranslationHook(funcBody)) {
-      injectUseTranslationHook(funcBody);
-    }
-  }
+  injectHooks(functionsNeedingHook);
 
   if (!hasUseTranslationImport(ast)) {
     addUseTranslationImport(ast);
@@ -280,41 +295,30 @@ function rewriteHookFile(
   return code;
 }
 
-function findEnclosingFunctionBody(path: any): t.BlockStatement | null {
-  let current = path.parentPath;
-
-  while (current) {
-    const node = current.node;
-
-    if (
-      t.isFunctionDeclaration(node) ||
-      t.isFunctionExpression(node) ||
-      t.isArrowFunctionExpression(node)
-    ) {
-      if (t.isBlockStatement(node.body)) {
-        return node.body;
-      }
+function injectHooks(functions: Set<t.Function>): void {
+  for (const fn of functions) {
+    const body = ensureBlockBody(fn);
+    if (!hasUseTranslationHook(body)) {
+      injectUseTranslationHook(body);
     }
-
-    current = current.parentPath;
   }
-
-  return null;
 }
 
-function findEnclosingVariableDeclarator(
-  path: any,
+/**
+ * The top-level `const X = …` a container belongs to, if any. Only module
+ * scope containers can be turned into `(t) => …` factories; anything inside a
+ * class or a plain helper function has no safe way to receive `t`.
+ */
+function findModuleLevelDeclarator(
+  path: NodePath,
 ): t.VariableDeclarator | null {
-  let current = path.parentPath;
-
-  while (current) {
-    if (t.isVariableDeclarator(current.node)) {
-      return current.node;
-    }
-    current = current.parentPath;
-  }
-
-  return null;
+  const declaratorPath = path.findParent((p) =>
+    p.isVariableDeclarator(),
+  ) as NodePath<t.VariableDeclarator> | null;
+  if (!declaratorPath || !t.isIdentifier(declaratorPath.node.id)) return null;
+  if (declaratorPath.getFunctionParent()) return null;
+  if (declaratorPath.findParent((p) => p.isClass())) return null;
+  return declaratorPath.node;
 }
 
 export function rewriteFiles(options: RewriterOptions): RewriteResult[] {
@@ -493,8 +497,24 @@ export function rewriteDeepFiles(options: RewriterOptions): RewriteResult[] {
       });
 
       let modified = false;
-      const functionsNeedingHook = new Set<t.BlockStatement>();
+      const functionsNeedingHook = new Set<t.Function>();
       const moduleScopeBindings = new Map<string, t.VariableDeclarator>();
+
+      // Records where `t` will come from for a container at `path`; false when
+      // there's no safe source, in which case the string is left as-is.
+      const provideT = (path: NodePath): boolean => {
+        const component = findComponentFunction(path);
+        if (component) {
+          functionsNeedingHook.add(component.node);
+          return true;
+        }
+        const declarator = findModuleLevelDeclarator(path);
+        if (declarator) {
+          moduleScopeBindings.set((declarator.id as t.Identifier).name, declarator);
+          return true;
+        }
+        return false;
+      };
 
       traverse(ast, {
         ObjectProperty(path) {
@@ -502,24 +522,10 @@ export function rewriteDeepFiles(options: RewriterOptions): RewriteResult[] {
           const value = (path.node.value as t.StringLiteral).value;
           const key = fileValueMap.get(value);
           if (!key) return;
+          if (!provideT(path)) return;
 
           path.node.value = buildTCall(key);
           modified = true;
-
-          const funcBody = findEnclosingFunctionBody(path);
-          if (funcBody) {
-            functionsNeedingHook.add(funcBody);
-            return;
-          }
-
-          const declarator = findEnclosingVariableDeclarator(path);
-          if (
-            declarator &&
-            t.isIdentifier(declarator.id) &&
-            path.scope.getBinding(declarator.id.name)?.path.node === declarator
-          ) {
-            moduleScopeBindings.set(declarator.id.name, declarator);
-          }
         },
 
         ArrayExpression(path) {
@@ -530,24 +536,10 @@ export function rewriteDeepFiles(options: RewriterOptions): RewriteResult[] {
             const value = (elem as t.StringLiteral).value;
             const key = fileValueMap.get(value);
             if (!key) continue;
+            if (!provideT(path)) return;
 
             elements[i] = buildTCall(key);
             modified = true;
-
-            const funcBody = findEnclosingFunctionBody(path);
-            if (funcBody) {
-              functionsNeedingHook.add(funcBody);
-              continue;
-            }
-
-            const declarator = findEnclosingVariableDeclarator(path);
-            if (
-              declarator &&
-              t.isIdentifier(declarator.id) &&
-              path.scope.getBinding(declarator.id.name)?.path.node === declarator
-            ) {
-              moduleScopeBindings.set(declarator.id.name, declarator);
-            }
           }
         },
 
@@ -568,24 +560,10 @@ export function rewriteDeepFiles(options: RewriterOptions): RewriteResult[] {
             const value = (valueElem as t.StringLiteral).value;
             const key = fileValueMap.get(value);
             if (!key) continue;
+            if (!provideT(path)) return;
 
             pairElems[1] = buildTCall(key);
             modified = true;
-
-            const funcBody = findEnclosingFunctionBody(path);
-            if (funcBody) {
-              functionsNeedingHook.add(funcBody);
-              continue;
-            }
-
-            const declarator = findEnclosingVariableDeclarator(path);
-            if (
-              declarator &&
-              t.isIdentifier(declarator.id) &&
-              path.scope.getBinding(declarator.id.name)?.path.node === declarator
-            ) {
-              moduleScopeBindings.set(declarator.id.name, declarator);
-            }
           }
         },
       });
@@ -629,21 +607,17 @@ export function rewriteDeepFiles(options: RewriterOptions): RewriteResult[] {
             const binding = path.scope.getBinding(varName);
             if (!binding || binding.path.node !== declarator) return;
 
-            const funcBody = findEnclosingFunctionBody(path);
-            if (!funcBody) return;
+            const component = findComponentFunction(path);
+            if (!component) return;
 
             path.replaceWith(buildTFactoryCall(varName));
-            functionsNeedingHook.add(funcBody);
+            functionsNeedingHook.add(component.node);
             path.skip();
           },
         });
       }
 
-      for (const funcBody of functionsNeedingHook) {
-        if (!hasUseTranslationHook(funcBody)) {
-          injectUseTranslationHook(funcBody);
-        }
-      }
+      injectHooks(functionsNeedingHook);
 
       if (!hasUseTranslationImport(ast)) {
         addUseTranslationImport(ast);

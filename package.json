@@ -1,11 +1,11 @@
 {
   "name": "i18n-autopilot",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "license": "MIT",
-  "description": "Instant i18n for React Native codebases — powered by Lingo.dev",
+  "description": "Instant i18n for React Native codebases — extract strings, rewrite to t(), and translate with Lingo.dev, Google, OpenAI, Claude, AWS, LibreTranslate, MyMemory, or your own AI",
   "main": "dist/bin/index.js",
   "bin": {
-    "i18n-autopilot": "./dist/bin/index.js"
+    "i18n-autopilot": "dist/bin/index.js"
   },
   "author": {
     "name": "Olabanjo Olakunri",
@@ -13,7 +13,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Oabanjo01/i18n-autopilot"
+    "url": "git+https://github.com/Oabanjo01/i18n-autopilot.git"
   },
   "bugs": {
     "url": "https://github.com/Oabanjo01/i18n-autopilot/issues",
@@ -26,8 +26,8 @@
     "prepublishOnly": "yarn build",
     "checklog": "cat /tmp/i18n-autopilot.log",
     "watchlogs": "tail -f ~/.i18n-autopilot/run.log",
-    "test": "ts-node tests/deep-rewriter.test.ts",
-    "self-test": "echo 'Just grab this path: tests/fixtures/deep-analyzer-sample/' && npx ts-node bin/index.ts --deep"
+    "test": "vitest run",
+    "self-test": "node scripts/self-test.cjs --deep"
   },
   "files": [
     "dist",
@@ -44,12 +44,20 @@
     "translation",
     "localization",
     "lingo",
+    "google-translate",
+    "openai",
+    "claude",
+    "aws-translate",
+    "libretranslate",
+    "ai-translation",
     "automation",
     "cli",
     "expo",
     "mobile"
   ],
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.128.0",
+    "@aws-sdk/client-translate": "3.1053.0",
     "@babel/generator": "^7.29.1",
     "@babel/parser": "^7.29.0",
     "@babel/traverse": "^7.29.0",
@@ -63,8 +71,10 @@
     "@types/babel__generator": "^7.27.0",
     "@types/babel__traverse": "^7.28.0",
     "@types/node": "^25.5.0",
+    "fast-check": "4.8.0",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "3.2.4"
   },
   "engines": {
     "node": ">=18.0.0"
