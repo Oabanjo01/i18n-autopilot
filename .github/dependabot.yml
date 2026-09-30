@@ -1,16 +1,27 @@
 version: 2
 updates:
+  # At most two npm PRs a month: one for routine updates, one for majors.
   - package-ecosystem: npm
     directory: /
     schedule:
-      interval: weekly
-    # Group routine updates into one PR a week instead of one per package.
+      interval: monthly
     groups:
       minor-and-patch:
         update-types: [minor, patch]
+      major:
+        update-types: [major]
+    ignore:
+      # chalk 6's types can't be resolved with this project's CommonJS
+      # module settings; revisit if the build moves to ESM.
+      - dependency-name: chalk
+        versions: [">=6"]
     open-pull-requests-limit: 5
 
+  # At most one PR a month for the GitHub Actions used in workflows.
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]

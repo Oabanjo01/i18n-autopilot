@@ -9,16 +9,21 @@ permissions:
   contents: read
 
 jobs:
-  # "test" is the required status check on main — keep the job name in sync
-  # with the branch ruleset if you rename it.
-  test:
+  node:
+    name: Node ${{ matrix.node }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The minimum in package.json "engines", plus the latest of each
+        # supported LTS line.
+        node: ["22.13.0", "22", "24"]
     steps:
       - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: ${{ matrix.node }}
           cache: yarn
 
       - run: yarn install --frozen-lockfile
@@ -34,3 +39,20 @@ jobs:
 
       - name: Build
         run: yarn build
+
+      - name: Built CLI starts
+        run: node dist/bin/index.js --version
+
+  # "test" is the required status check on main. It passes only when every
+  # Node version above passed — keep this job name in sync with the ruleset.
+  test:
+    needs: node
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: All Node versions passed
+        run: |
+          if [ "${{ needs.node.result }}" != "success" ]; then
+            echo "::error::CI failed on at least one Node version (${{ needs.node.result }})"
+            exit 1
+          fi

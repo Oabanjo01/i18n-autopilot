@@ -6,7 +6,7 @@ Security fixes are released for the latest minor version on npm.
 
 | Version | Supported |
 | ------- | --------- |
-| 1.1.x   | ✅        |
+| 1.1.x   | ✅ (Node 22.13+) |
 | < 1.1   | ❌        |
 
 ## Reporting a vulnerability
