@@ -24,7 +24,7 @@ jobs:
       contents: write # create the git tag and GitHub Release
       id-token: write # npm trusted publishing (no npm token stored in GitHub)
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v4
         with:
