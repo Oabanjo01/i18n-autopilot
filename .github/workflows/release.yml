@@ -26,11 +26,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # No registry-url: trusted publishing authenticates via OIDC, and the
+      # .npmrc that registry-url writes (with an unset ${NODE_AUTH_TOKEN})
+      # makes yarn fail under setup-node v7.
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: yarn
-          registry-url: https://registry.npmjs.org
 
       - name: Check whether this version is already published
         id: check
