@@ -52,6 +52,21 @@ function runCli(
   return output;
 }
 
+/** Runs `--check`; no answers are scripted, so any prompt fails the run. */
+function runCheck(extraFlags: string[] = []): { status: number | null; stdout: string; stderr: string } {
+  const result = spawnSync(
+    process.execPath,
+    [HARNESS, "--check", "--project", app, ...extraFlags],
+    {
+      cwd: root,
+      encoding: "utf-8",
+      timeout: 60_000,
+      env: { ...process.env, HOME: root, ANSWERS: "{}" },
+    },
+  );
+  return { status: result.status, stdout: result.stdout, stderr: result.stderr };
+}
+
 function providerCalls(): Array<{ targetLocale: string; keys: string[] }> {
   return fs
     .readFileSync(callsLog, "utf-8")
@@ -304,6 +319,15 @@ describe("end-to-end on the scenario fixture", { timeout: 90_000 }, () => {
     expect(providerCalls()).toEqual([]);
   });
 
+  it("--check passes on a fully translated project without prompting", () => {
+    const { status, stdout, stderr } = runCheck();
+    expect(stderr).not.toContain("No scripted answer");
+    expect(status).toBe(0);
+    expect(stdout).toMatch(/es\s+\d+\/\d+\s+✅\s+100%/);
+    expect(stdout).toMatch(/fr-FR\s+\d+\/\d+\s+✅\s+100%/);
+    expect(stdout).toContain("All locales are up to date.");
+  });
+
   it("dry run writes nothing", () => {
     const before = fs.readFileSync(path.join(app, "locales/en.json"), "utf-8");
     fs.appendFileSync(
@@ -334,6 +358,15 @@ describe("end-to-end on the scenario fixture", { timeout: 90_000 }, () => {
     expect(output).toContain("es — 1 changed key(s) kept as-is, skipping");
     expect(providerCalls()).toEqual([]);
     expect(readJson("locales/es.json").welcome_demo).toBe("[es] Welcome to the demo");
+  });
+
+  it("--check flags the kept translation as outdated and exits 1", () => {
+    const { status, stdout } = runCheck();
+    expect(status).toBe(1);
+    expect(stdout).toContain("1 outdated");
+    expect(stdout).toContain(
+      "Outdated in es (English changed since translation):\n    - welcome_demo",
+    );
   });
 
   it("changed English: answering Yes re-translates only the changed key", () => {
@@ -368,5 +401,39 @@ describe("end-to-end on the scenario fixture", { timeout: 90_000 }, () => {
     expect(en.get_started_your_2).toBe("Get started with your account");
     expect(en.get_started_your_3).toBe("Get started with your adventure");
     expect(readApp("screens/Onboarding.tsx")).toContain('t("get_started_your_3")');
+  });
+
+  it("--check --json reports missing and stale keys for dashboards", () => {
+    const frPath = path.join(app, "locales/fr-FR.json");
+    const fr = readJson("locales/fr-FR.json");
+    delete fr.good_morning;
+    fr.removed_feature = "[fr-FR] Removed feature";
+    fs.writeFileSync(frPath, JSON.stringify(fr, null, 2));
+
+    const { status, stdout } = runCheck(["--json"]);
+    expect(status).toBe(1);
+    const report = JSON.parse(stdout);
+    expect(report.ok).toBe(false);
+    const frReport = report.locales.find((l: any) => l.locale === "fr-FR");
+    expect(frReport.missing).toEqual(["good_morning"]);
+    expect(frReport.stale).toEqual(["removed_feature"]);
+    const esReport = report.locales.find((l: any) => l.locale === "es");
+    expect(esReport).toMatchObject({ missing: [], stale: [], outdated: [] });
+  });
+
+  it("--check --locales limits the report to the named locales", () => {
+    const { status, stdout } = runCheck(["--locales", "es"]);
+    expect(status).toBe(0);
+    expect(stdout).not.toContain("fr-FR");
+  });
+
+  it("--check exits 2 when the project has no en.json", () => {
+    const empty = fs.mkdtempSync(path.join(root, "empty-"));
+    const result = spawnSync(process.execPath, [HARNESS, "--check", "--project", empty], {
+      encoding: "utf-8",
+      env: { ...process.env, HOME: root, ANSWERS: "{}" },
+    });
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain("No locales/en.json");
   });
 });

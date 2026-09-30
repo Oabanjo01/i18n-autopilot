@@ -60,6 +60,49 @@ npx i18n-autopilot --dry-run
 *Note:* if `i18next`/`react-i18next` are missing, you may still be asked
 whether to install them.
 
+### Coverage Check
+
+Check that every locale is complete and current, without prompting or
+calling a provider:
+```bash
+npx i18n-autopilot --check                      # current directory
+npx i18n-autopilot --check --project ./my-app   # another project
+npx i18n-autopilot --check --locales es,fr-FR   # only these locales
+npx i18n-autopilot --check --json               # machine-readable
+```
+
+For each locale (every `locales/*.json` except `en.json`, unless you pass
+`--locales`) it reports:
+- **Missing** — keys in `en.json` with no translation
+- **Outdated** — translations made from English that has since changed
+  (needs `i18n-autopilot.sources.json`, written on every translation run)
+- **Stale** — keys no longer in `en.json`, safe to delete
+
+```
+i18n Coverage Report
+────────────────────────────────────
+  Source strings (en): 4 keys
+  es           4/4  ✅ 100%
+  fr-FR        2/4  ❌  50%  — 2 missing, 1 outdated, 1 stale
+
+  Missing in fr-FR:
+    - good_morning
+    - sign_out
+  Outdated in fr-FR (English changed since translation):
+    - welcome
+  Stale in fr-FR (no longer in en.json):
+    - old_banner
+```
+
+**Exit codes:** `0` everything up to date · `1` something missing, outdated
+or stale · `2` couldn't run (e.g. no `locales/en.json`, unparseable JSON).
+
+**In CI**, add it as a step so pull requests fail when translations fall
+behind:
+```yaml
+- run: npx i18n-autopilot --check
+```
+
 ---
 
 ## Common Workflows
@@ -334,12 +377,12 @@ becomes a single line in `en.json`, and a space next to a nested element
 
 ### Deleting Unused Keys
 
-Currently manual:
-1. Identify unused keys in `en.json`
-2. Delete them
-3. Delete from all language files (`es.json`, `fr-FR.json`, etc.)
+1. Delete the keys you no longer need from `en.json`
+2. Run `npx i18n-autopilot --check` — it lists them as **stale** in every
+   language file
+3. Delete the stale keys from those files
 
-*(Automated cleanup coming in future release)*
+*(Automatic cleanup with `--fix` is planned.)*
 
 ---
 
