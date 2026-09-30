@@ -58,10 +58,10 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",
     "@aws-sdk/client-translate": "3.1141.0",
-    "@babel/generator": "^7.29.1",
+    "@babel/generator": "^8.0.6",
     "@babel/parser": "^7.29.9",
-    "@babel/traverse": "^7.29.0",
-    "@babel/types": "^7.29.8",
+    "@babel/traverse": "^8.0.6",
+    "@babel/types": "^8.0.6",
     "chalk": "^5.6.2",
     "commander": "^15.0.0",
     "inquirer": "^14.2.2",
@@ -73,8 +73,8 @@
     "@types/node": "^26.6.3",
     "fast-check": "4.10.2",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.3",
-    "vitest": "3.2.4"
+    "typescript": "^7.0.2",
+    "vitest": "5.0.2"
   },
   "engines": {
     "node": ">=22.13.0"
