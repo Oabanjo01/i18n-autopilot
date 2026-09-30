@@ -142,6 +142,10 @@ It depends on the provider you choose — each has its own pricing (some are fre
 
 You're asked. The tool records the English each translation was made from (in `i18n-autopilot.sources.json` — commit it so your team shares this), and on the next run it asks once: "N English string(s) changed since they were last translated. Re-translate them?" **Yes** (default) re-translates them; **No** keeps the existing translations and asks again next run. Keys translated before upgrading to this version are baselined on the first run, so earlier edits aren't detected — delete such a key from the target locale files to force it. See [Updating Existing Translations](./USAGE.md#updating-existing-translations).
 
+### How do I see which translations are missing or out of date?
+
+Run `npx i18n-autopilot --check`. It prints a coverage report per locale — missing keys, translations made from English that has since changed, and stale keys no longer in `en.json` — without prompting or calling a provider, and exits `1` if anything needs attention, so you can add it to CI. Add `--json` for machine-readable output. See [Coverage Check](./USAGE.md#coverage-check).
+
 ### Can I edit translations manually?
 
 Yes, edit `locales/{locale}.json` files directly. The tool preserves manual edits.

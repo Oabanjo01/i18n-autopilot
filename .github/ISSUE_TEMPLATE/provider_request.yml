@@ -1,0 +1,43 @@
+name: Translation provider request
+description: Ask for a new built-in translation provider
+labels: [provider]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        You can already use any service today with a [custom provider file](https://github.com/Oabanjo01/i18n-autopilot/blob/main/docs/PROVIDERS.md#custom-provider--bring-your-own-ai). Request a built-in provider if you think many users would want it.
+  - type: input
+    id: service
+    attributes:
+      label: Service
+      placeholder: "e.g. Azure Translator, Gemini, DeepSeek"
+    validations:
+      required: true
+  - type: input
+    id: docs
+    attributes:
+      label: API documentation link
+    validations:
+      required: true
+  - type: dropdown
+    id: pricing
+    attributes:
+      label: Pricing
+      options:
+        - Free
+        - Free tier available
+        - Paid only
+        - Self-hosted
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why this provider?
+      description: Languages, quality, cost, privacy — what makes it worth building in?
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contributing
+      options:
+        - label: I'd be willing to open a PR for this (see CONTRIBUTING.md → Adding a translation provider)

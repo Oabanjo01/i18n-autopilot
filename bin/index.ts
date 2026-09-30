@@ -42,6 +42,12 @@ import {
   migrateIfNeeded,
 } from "../src/credentialStore";
 import { ProviderError } from "../src/providers/types";
+import {
+  checkCoverage,
+  CoverageError,
+  CoverageReport,
+  formatCoverageReport,
+} from "../src/coverage";
 
 program
   .name("i18n-autopilot")
@@ -49,9 +55,56 @@ program
   .version(version)
   .option("--dry-run", "Preview changes without writing any files")
   .option("--deep", "Enable deep object/array/Map string extraction")
+  .option(
+    "--check",
+    "Report translation coverage without prompting; exits 1 if any locale has missing, outdated or stale keys",
+  )
+  .option("--project <path>", "Project to check (with --check)", ".")
+  .option(
+    "--locales <codes>",
+    "Comma-separated locales to check (with --check; default: every locales/*.json)",
+  )
+  .option("--json", "Print the --check report as JSON")
   .parse(process.argv);
 
 const options = program.opts();
+
+if (!options.check) {
+  const checkOnly = ["json", "locales"].filter((o) => options[o] !== undefined);
+  if (program.getOptionValueSource("project") === "cli") checkOnly.push("project");
+  if (checkOnly.length > 0) {
+    program.error(
+      `${checkOnly.map((o) => `--${o}`).join(", ")} can only be used with --check`,
+    );
+  }
+}
+
+function runCheck(): never {
+  const locales = options.locales
+    ? String(options.locales)
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : undefined;
+
+  let report: CoverageReport;
+  try {
+    report = checkCoverage(options.project, locales);
+  } catch (err) {
+    if (err instanceof CoverageError) {
+      console.error(`  ✘ ${err.message}`);
+      process.exit(2);
+    }
+    throw err;
+  }
+
+  if (options.json) {
+    process.stdout.write(JSON.stringify(report, null, 2) + "\n");
+  } else {
+    console.log(formatCoverageReport(report));
+  }
+  process.exit(report.ok ? 0 : 1);
+}
 
 async function main() {
   log(chalk.bold.cyan("\n  i18n Autopilot\n"));
@@ -666,6 +719,8 @@ async function main() {
   log(chalk.green("\n  ✨ Done!\n"));
   process.exit(0);
 }
+
+if (options.check) runCheck();
 
 initLog();
 
