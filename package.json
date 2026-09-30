@@ -73,8 +73,8 @@
     "@types/node": "^26.6.3",
     "fast-check": "4.10.2",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.3",
-    "vitest": "3.2.4"
+    "typescript": "^6.0.3",
+    "vitest": "4.1.11"
   },
   "engines": {
     "node": ">=22.13.0"
