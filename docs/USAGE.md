@@ -422,6 +422,16 @@ real CLI against a temporary copy, with scripted answers and an offline fake
 provider, across several runs (no changes, dry run, edited English, a new
 colliding string).
 
+### Releasing (maintainers)
+
+`main` is protected: changes land through pull requests, and CI (type-check,
+tests, build) must pass before merging. Merging to `main` runs the Release
+workflow, which publishes to npm **only if the version in `package.json`
+isn't on npm yet**, then tags `vX.Y.Z` and creates a GitHub Release.
+
+To release, bump `version` in `package.json` in your PR (the CLI's
+`--version` reads it) and merge. PRs without a version bump publish nothing.
+
 ### Programmatic Use
 
 *(Coming soon)*

@@ -2,6 +2,7 @@
 
 import chalk from "chalk";
 import { program } from "commander";
+import { version } from "../package.json";
 import fs from "fs";
 import inquirer from "inquirer";
 import ora from "ora";
@@ -45,7 +46,7 @@ import { ProviderError } from "../src/providers/types";
 program
   .name("i18n-autopilot")
   .description("Instant i18n for React Native codebases")
-  .version("1.0.2")
+  .version(version)
   .option("--dry-run", "Preview changes without writing any files")
   .option("--deep", "Enable deep object/array/Map string extraction")
   .parse(process.argv);

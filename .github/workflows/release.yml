@@ -1,0 +1,67 @@
+name: Release
+
+# Every merge to main runs the tests; it publishes to npm only when the
+# version in package.json isn't on npm yet. Bump the version in a PR to release.
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the git tag and GitHub Release
+      id-token: write # npm trusted publishing (no npm token stored in GitHub)
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: yarn
+          registry-url: https://registry.npmjs.org
+
+      - name: Check whether this version is already published
+        id: check
+        run: |
+          NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if npm view "$NAME@$VERSION" version > /dev/null 2>&1; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::$NAME@$VERSION is already on npm — nothing to publish. Bump the version in package.json to release."
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Trusted publishing needs npm 11.5.1 or newer.
+      - if: steps.check.outputs.publish == 'true'
+        run: npm install -g npm@latest
+
+      - if: steps.check.outputs.publish == 'true'
+        run: yarn install --frozen-lockfile
+
+      # prepublishOnly runs the build; trusted publishing adds provenance.
+      - if: steps.check.outputs.publish == 'true'
+        run: npm publish
+
+      - if: steps.check.outputs.publish == 'true'
+        name: Tag and create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ steps.check.outputs.version }}" \
+            --target "$GITHUB_SHA" \
+            --title "v${{ steps.check.outputs.version }}" \
+            --generate-notes
