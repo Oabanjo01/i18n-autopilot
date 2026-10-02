@@ -71,6 +71,10 @@ rm ~/.i18n-autopilot/config.json
 **Upgrading from v1.0.x:** the old flat `{ "apiKey": "..." }` format is migrated
 automatically to `providers.lingo` on the next run.
 
+**In CI mode (`--ci`)** this file isn't used: each provider reads its key from
+an environment variable instead (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, …). See
+[CI Mode](./USAGE.md#ci-mode) for the full list.
+
 ---
 
 ## General Notes

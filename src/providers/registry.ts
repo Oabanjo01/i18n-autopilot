@@ -51,11 +51,14 @@ export interface ProviderCredentials {
  */
 export function buildDefaultRegistry(
   credentials: ProviderCredentials,
+  options: { interactive?: boolean } = {},
 ): ProviderRegistry {
   const registry = new ProviderRegistry();
 
   if (credentials.lingo?.apiKey) {
-    registry.register(new LingoProvider(credentials.lingo.apiKey));
+    registry.register(
+      new LingoProvider(credentials.lingo.apiKey, options.interactive ?? true),
+    );
   }
 
   if (credentials.google?.apiKey) {

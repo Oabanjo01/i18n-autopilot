@@ -146,6 +146,10 @@ You're asked. The tool records the English each translation was made from (in `i
 
 Run `npx i18n-autopilot --check`. It prints a coverage report per locale — missing keys, translations made from English that has since changed, and stale keys no longer in `en.json` — without prompting or calling a provider, and exits `1` if anything needs attention, so you can add it to CI. Add `--json` for machine-readable output. See [Coverage Check](./USAGE.md#coverage-check).
 
+### Can I run it in CI or a script, without prompts?
+
+Yes — `npx i18n-autopilot --ci`. It reads your settings from a committed `i18n-autopilot.config.json` and API keys from environment variables (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, …), never prompts, and exits non-zero on failure. Run the CLI interactively once and accept the offer to save your settings to create the file. See [CI Mode](./USAGE.md#ci-mode).
+
 ### Can I edit translations manually?
 
 Yes, edit `locales/{locale}.json` files directly. The tool preserves manual edits.

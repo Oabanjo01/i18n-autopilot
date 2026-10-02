@@ -39,6 +39,8 @@ const { t } = useTranslation();
 - **Dry run** (`--dry-run`) — preview everything before writing files
 - **Coverage check** (`--check`) — reports missing, outdated and stale
   translations without prompting, and exits non-zero so CI can fail on it
+- **CI mode** (`--ci`) — runs the whole pipeline without prompts, from a
+  committed config file and API keys in environment variables
 
 ---
 
@@ -79,9 +81,11 @@ Japanese (`ja-JP`), Hausa (`ha`), Portuguese (`pt-BR`), Chinese Simplified
 | `--dry-run` | Preview changes without writing any files |
 | `--deep` | Enable deep object/array/Map string extraction |
 | `--check` | Report translation coverage without prompting; exits 1 if anything is missing, outdated or stale |
-| `--project <path>` | Project to check (with `--check`; default `.`) |
+| `--project <path>` | Project path (with `--check` or `--ci`; default `.`) |
 | `--locales <codes>` | Comma-separated locales to check (with `--check`; default: every `locales/*.json`) |
 | `--json` | Print the `--check` report as JSON |
+| `--ci` | Run without prompts: settings from `i18n-autopilot.config.json`, API keys from environment variables ([CI Mode](./docs/USAGE.md#ci-mode)) |
+| `--config <file>` | Config file for `--ci` (default: `<project>/i18n-autopilot.config.json`) |
 
 ---
 
