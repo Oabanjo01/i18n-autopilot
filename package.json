@@ -56,8 +56,8 @@
     "mobile"
   ],
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.128.0",
-    "@aws-sdk/client-translate": "3.1141.0",
+    "@anthropic-ai/sdk": "^0.129.0",
+    "@aws-sdk/client-translate": "3.1142.0",
     "@babel/generator": "^7.29.1",
     "@babel/parser": "^7.29.9",
     "@babel/traverse": "^7.29.0",
@@ -74,7 +74,7 @@
     "fast-check": "4.10.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
-    "vitest": "3.2.4"
+    "vitest": "3.2.7"
   },
   "engines": {
     "node": ">=22.13.0"
