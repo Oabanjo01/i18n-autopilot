@@ -20,7 +20,13 @@ export function initLog(): void {
 
 export function log(message: string): void {
   process.stdout.write(message + '\n');
-  fs.appendFileSync(LOG_FILE, message + '\n', 'utf-8');
+  // The log file is a convenience copy; never let it break a run (e.g. a
+  // read-only home directory in CI, or initLog not having run).
+  try {
+    fs.appendFileSync(LOG_FILE, message + '\n', 'utf-8');
+  } catch {
+    // Terminal output above is the source of truth.
+  }
 }
 
 export function getLogPath(): string {
