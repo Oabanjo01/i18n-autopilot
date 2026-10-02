@@ -15,6 +15,14 @@ updates:
       # module settings; revisit if the build moves to ESM.
       - dependency-name: chalk
         versions: [">=6"]
+      # Toolchain majors need a planned migration (see ROADMAP "Toolchain
+      # migration"); minor and patch updates still come through.
+      - dependency-name: "@babel/*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+      - dependency-name: vitest
+        update-types: ["version-update:semver-major"]
     open-pull-requests-limit: 5
 
   # At most one PR a month for the GitHub Actions used in workflows.
