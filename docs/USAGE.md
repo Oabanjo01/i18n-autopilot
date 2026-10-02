@@ -103,6 +103,74 @@ behind:
 - run: npx i18n-autopilot --check
 ```
 
+### CI Mode
+
+Run the full pipeline — extract, translate, rewrite — with no prompts, for CI
+jobs and scripts:
+```bash
+npx i18n-autopilot --ci                          # settings from ./i18n-autopilot.config.json
+npx i18n-autopilot --ci --project ./my-app       # another project
+npx i18n-autopilot --ci --config ci/i18n.json    # config file elsewhere
+npx i18n-autopilot --ci --dry-run                # preview, write nothing
+```
+
+**Settings** come from `i18n-autopilot.config.json` in the project (commit
+it). The easiest way to create one: run the interactive CLI once and answer
+**Yes** when it offers to save your settings.
+
+```json
+{
+  "targetLocales": ["es", "fr-FR", "de-DE"],
+  "provider": "openai",
+  "textComponents": ["ThemedText"],
+  "deep": true,
+  "retranslateChanged": true,
+  "installDependencies": false
+}
+```
+
+| Setting | Required | Meaning |
+| --- | --- | --- |
+| `targetLocales` | ✅ | Languages to translate into |
+| `provider` | ✅ | `lingo`, `google`, `openai`, `claude`, `aws`, `libretranslate`, `mymemory` or `custom` |
+| `customProviderPath` | with `custom` | Path to your provider file, relative to the config file |
+| `textComponents` | | Custom Text components (`Text` is always included) |
+| `deep` | | Same as `--deep` (default `false`) |
+| `retranslateChanged` | | Re-translate English that changed since it was translated (default `true`) |
+| `installDependencies` | | Install `i18next`/`react-i18next` if missing (default `false` — the run fails with instructions instead) |
+
+Unknown or misspelled settings are reported as errors.
+
+**Credentials** are read from environment variables only — never from the
+config file — so keys stay in your CI's secret store:
+
+| Provider | Environment variables |
+| --- | --- |
+| `lingo` | `LINGO_API_KEY` |
+| `google` | `GOOGLE_TRANSLATE_API_KEY` |
+| `openai` | `OPENAI_API_KEY` |
+| `claude` | `ANTHROPIC_API_KEY` |
+| `aws` | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, optional `AWS_REGION` (default `us-east-1`) |
+| `libretranslate` | optional `LIBRETRANSLATE_URL`, `LIBRETRANSLATE_API_KEY` |
+| `mymemory` | optional `MYMEMORY_EMAIL` |
+| `custom` | whatever your provider file reads |
+
+With `lingo`, the Lingo.dev CLI must already be installed in the job
+(`npm install -g lingo.dev`) — CI mode never installs it for you.
+
+**Exit codes:** `0` success · `1` a locale failed to translate, or `i18next`
+is missing · `2` config or environment problem (missing file, invalid setting,
+missing API key).
+
+**Output** is plain text — no spinners — so CI logs stay readable.
+
+**GitHub Actions example:**
+```yaml
+- run: npx i18n-autopilot --ci
+  env:
+    OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+```
+
 ---
 
 ## Common Workflows

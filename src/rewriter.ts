@@ -391,8 +391,13 @@ function isPackageInstalled(projectPath: string, packageName: string): boolean {
   }
 }
 
+/**
+ * Makes sure i18next and react-i18next are in the project's package.json.
+ * `install`: "ask" prompts; true installs without asking; false never installs.
+ */
 export async function ensureI18nDependencies(
   projectPath: string,
+  install: boolean | "ask" = "ask",
 ): Promise<boolean> {
   const hasI18next = isPackageInstalled(projectPath, "i18next");
   const hasReactI18next = isPackageInstalled(projectPath, "react-i18next");
@@ -409,18 +414,29 @@ export async function ensureI18nDependencies(
   const installArgs = [pm === "yarn" ? "add" : "install", ...missingPackages];
   const installCmd = `${pm} ${installArgs.join(" ")}`;
 
-  const { permission } = await inquirer.prompt([
-    {
-      type: "confirm",
-      name: "permission",
-      message: `${missing} not found in project. Install now using ${pm}?`,
-      default: true,
-    },
-  ]);
+  const permission =
+    install === "ask"
+      ? (
+          await inquirer.prompt([
+            {
+              type: "confirm",
+              name: "permission",
+              message: `${missing} not found in project. Install now using ${pm}?`,
+              default: true,
+            },
+          ])
+        ).permission
+      : install;
 
   if (!permission) {
     log(
-      chalk.yellow(`\n  Install manually inside your project: ${installCmd}\n`),
+      chalk.yellow(
+        `\n  ${missing} not found. Install it inside your project: ${installCmd}` +
+          (install === false
+            ? `\n  (or set "installDependencies": true in i18n-autopilot.config.json)`
+            : "") +
+          "\n",
+      ),
     );
     return false;
   }

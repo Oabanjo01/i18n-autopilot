@@ -89,8 +89,17 @@ function isLingoInstalled(): boolean {
   }
 }
 
-async function ensureLingoInstalled(): Promise<boolean> {
+async function ensureLingoInstalled(interactive: boolean): Promise<boolean> {
   if (isLingoInstalled()) return true;
+
+  if (!interactive) {
+    log(
+      chalk.red(
+        "\n  Lingo.dev CLI is not installed. Add `npm install -g lingo.dev` to your CI job before running i18n-autopilot.\n",
+      ),
+    );
+    return false;
+  }
 
   const { permission } = await inquirer.prompt([
     {
@@ -187,7 +196,11 @@ async function runLingoForLocale(
 export class LingoProvider implements TranslationProvider {
   readonly name = "lingo";
 
-  constructor(private readonly apiKey: string) {}
+  /** `interactive: false` never prompts (e.g. --ci); a missing CLI is an error. */
+  constructor(
+    private readonly apiKey: string,
+    private readonly interactive: boolean = true,
+  ) {}
 
   async translate(
     data: Record<string, string>,
@@ -196,11 +209,13 @@ export class LingoProvider implements TranslationProvider {
   ): Promise<Record<string, string>> {
     if (Object.keys(data).length === 0) return {};
 
-    const ready = await ensureLingoInstalled();
+    const ready = await ensureLingoInstalled(this.interactive);
     if (!ready) {
       throw new ProviderError(
         "lingo",
-        "Lingo.dev CLI is not installed and could not be installed automatically.",
+        this.interactive
+          ? "Lingo.dev CLI is not installed and could not be installed automatically."
+          : "Lingo.dev CLI is not installed (run `npm install -g lingo.dev` first).",
       );
     }
 

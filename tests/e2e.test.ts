@@ -27,6 +27,7 @@ const baseAnswers = {
   provider: "custom",
   customProviderPath: ` ${FAKE_PROVIDER} `,
   retranslate: true,
+  saveCiConfig: false,
 };
 
 function runCli(

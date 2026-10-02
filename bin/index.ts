@@ -41,13 +41,23 @@ import {
   saveCredential,
   migrateIfNeeded,
 } from "../src/credentialStore";
-import { ProviderError } from "../src/providers/types";
 import {
   checkCoverage,
   CoverageError,
   CoverageReport,
   formatCoverageReport,
 } from "../src/coverage";
+import {
+  CONFIG_FILE_NAME,
+  ConfigError,
+  PROVIDER_ENV_VARS,
+  ProviderName,
+  RunSettings,
+  ciRunSettings,
+  configFromSettings,
+  resolveConfigPath,
+  writeConfigFile,
+} from "../src/ciConfig";
 
 program
   .name("i18n-autopilot")
@@ -56,10 +66,18 @@ program
   .option("--dry-run", "Preview changes without writing any files")
   .option("--deep", "Enable deep object/array/Map string extraction")
   .option(
+    "--ci",
+    `Run without prompts, reading settings from ${CONFIG_FILE_NAME} and credentials from environment variables`,
+  )
+  .option(
+    "--config <file>",
+    `Config file for --ci (default: <project>/${CONFIG_FILE_NAME})`,
+  )
+  .option(
     "--check",
     "Report translation coverage without prompting; exits 1 if any locale has missing, outdated or stale keys",
   )
-  .option("--project <path>", "Project to check (with --check)", ".")
+  .option("--project <path>", "Project path (with --check or --ci)", ".")
   .option(
     "--locales <codes>",
     "Comma-separated locales to check (with --check; default: every locales/*.json)",
@@ -69,14 +87,31 @@ program
 
 const options = program.opts();
 
-if (!options.check) {
-  const checkOnly = ["json", "locales"].filter((o) => options[o] !== undefined);
-  if (program.getOptionValueSource("project") === "cli") checkOnly.push("project");
-  if (checkOnly.length > 0) {
-    program.error(
-      `${checkOnly.map((o) => `--${o}`).join(", ")} can only be used with --check`,
-    );
+{
+  const misuse: string[] = [];
+  if (options.check && options.ci) misuse.push("--check and --ci can't be used together");
+  if (!options.check) {
+    const checkOnly = ["json", "locales"].filter((o) => options[o] !== undefined);
+    if (checkOnly.length > 0) {
+      misuse.push(`${checkOnly.map((o) => `--${o}`).join(", ")} can only be used with --check`);
+    }
   }
+  if (!options.ci && options.config !== undefined) {
+    misuse.push("--config can only be used with --ci");
+  }
+  if (!options.check && !options.ci && program.getOptionValueSource("project") === "cli") {
+    misuse.push("--project can only be used with --check or --ci");
+  }
+  if (misuse.length > 0) program.error(misuse.join("\n"));
+}
+
+// Spinners redraw the line in place; without a real terminal (CI logs, or a
+// terminal reporting zero columns) that loops forever, so print plain lines.
+const useSpinners =
+  !options.ci && Boolean(process.stdout.isTTY) && (process.stdout.columns ?? 0) > 0;
+
+function spinner(text: string) {
+  return ora({ text, isEnabled: useSpinners }).start();
 }
 
 function runCheck(): never {
@@ -106,9 +141,7 @@ function runCheck(): never {
   process.exit(report.ok ? 0 : 1);
 }
 
-async function main() {
-  log(chalk.bold.cyan("\n  i18n Autopilot\n"));
-
+async function interactiveSettings(): Promise<RunSettings> {
   migrateIfNeeded();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -347,22 +380,41 @@ async function main() {
         .map((s: string) => s.trim())
         .filter(Boolean)
     : [];
-  const textComponents: string[] = ["Text", ...customComponents];
+
+  return {
+    projectPath: answers.projectPath,
+    locales: answers.locales,
+    textComponents: ["Text", ...customComponents],
+    provider: answers.provider as ProviderName,
+    customProviderPath: answers.customProviderPath,
+    credentials,
+    deep: Boolean(options.deep),
+    retranslateChanged: "ask",
+    installDependencies: "ask",
+    interactive: true,
+  };
+}
+
+/** Runs scan → translate → rewrite. Returns the number of locales that failed. */
+async function runPipeline(settings: RunSettings): Promise<number> {
+  const { projectPath, locales, textComponents } = settings;
+  let failedLocales = 0;
 
   if (options.dryRun) {
     log(chalk.yellow("\n  Dry-run mode — no files will be written.\n"));
   }
 
   log(chalk.gray("\n  Config locked in:"));
-  log(chalk.gray(`  Project    : ${answers.projectPath}`));
-  log(chalk.gray(`  Locales    : ${answers.locales.join(", ")}`));
+  log(chalk.gray(`  Project    : ${projectPath}`));
+  log(chalk.gray(`  Locales    : ${locales.join(", ")}`));
   log(chalk.gray(`  Components : ${textComponents.join(", ")}`));
-  log(chalk.gray(`  Provider   : ${answers.provider}`));
+  log(chalk.gray(`  Provider   : ${settings.provider}`));
+  log(chalk.gray(`  Deep       : ${settings.deep ? "yes" : "no"}`));
   log(chalk.gray(`  Dry run    : ${options.dryRun ? "yes" : "no"}\n`));
 
   // Step 1 — Smart Scan
-  const scanSpinner = ora("Scanning project...").start();
-  const scanResult = scanProjectSmart(answers.projectPath);
+  const scanSpinner = spinner("Scanning project...");
+  const scanResult = scanProjectSmart(projectPath);
   const { allFiles, filesToProcess, stats } = scanResult;
 
   const components = allFiles.filter((f) => f.fileType === "component");
@@ -378,16 +430,14 @@ async function main() {
   // Only do extraction/keying/locale-building if there are files to process
   if (filesToProcess.length > 0) {
     // Step 2 — Parse ONLY files that need processing
-    const parseSpinner = ora(
-      "Parsing strings from new/modified files...",
-    ).start();
+    const parseSpinner = spinner("Parsing strings from new/modified files...");
     let extracted = parseFiles(filesToProcess, textComponents);
     parseSpinner.succeed(
       `Found ${extracted.length} translatable strings in ${filesToProcess.length} files`,
     );
 
     // Step 2b — Deep analysis (opt-in via --deep)
-    if (options.deep) {
+    if (settings.deep) {
       log(
         chalk.cyan(
           "\n  Deep mode active — analyzing object/array/Map strings...\n",
@@ -426,9 +476,9 @@ async function main() {
     }
 
     // Step 3 — Generate keys
-    const keySpinner = ora("Generating keys...").start();
+    const keySpinner = spinner("Generating keys...");
     const existingEnPath = path.join(
-      path.resolve(answers.projectPath),
+      path.resolve(projectPath),
       "locales",
       "en.json",
     );
@@ -445,8 +495,8 @@ async function main() {
 
     // Step 4 — Build locale file (with merge logic) only if there are new keys
     if (keyed.length > 0) {
-      const localeSpinner = ora("Building locale file...").start();
-      localeMap = buildLocaleFile(keyed, answers.projectPath, options.dryRun);
+      const localeSpinner = spinner("Building locale file...");
+      localeMap = buildLocaleFile(keyed, projectPath, options.dryRun);
       localeSpinner.succeed(
         options.dryRun
           ? `Dry run — en.json preview (${Object.keys(localeMap).length} keys)`
@@ -454,11 +504,7 @@ async function main() {
       );
     } else {
       // No new strings found, load existing en.json
-      const enPath = path.join(
-        path.resolve(answers.projectPath),
-        "locales",
-        "en.json",
-      );
+      const enPath = path.join(path.resolve(projectPath), "locales", "en.json");
       if (fs.existsSync(enPath)) {
         localeMap = JSON.parse(fs.readFileSync(enPath, "utf-8"));
         log(
@@ -470,11 +516,7 @@ async function main() {
     }
   } else {
     // No new files to process, load existing en.json for translation
-    const enPath = path.join(
-      path.resolve(answers.projectPath),
-      "locales",
-      "en.json",
-    );
+    const enPath = path.join(path.resolve(projectPath), "locales", "en.json");
     if (fs.existsSync(enPath)) {
       localeMap = JSON.parse(fs.readFileSync(enPath, "utf-8"));
       log(
@@ -488,20 +530,21 @@ async function main() {
           "\n  ✔ All files are up to date and no translations needed.",
         ),
       );
-      log(chalk.gray(`\n  Full log saved to: ${getLogPath()}`));
-      process.exit(0);
+      return failedLocales;
     }
   }
 
   // Step 5 — Run translations
-  if (answers.locales.length > 0 && Object.keys(localeMap).length > 0) {
-    const registry = buildDefaultRegistry(credentials);
+  if (locales.length > 0 && Object.keys(localeMap).length > 0) {
+    const registry = buildDefaultRegistry(settings.credentials, {
+      interactive: settings.interactive,
+    });
     let provider;
     try {
       provider = await resolveProvider(
         registry,
-        answers.provider,
-        answers.customProviderPath,
+        settings.provider,
+        settings.customProviderPath,
       );
     } catch (err: any) {
       log(chalk.red(`\n  ✘ Failed to load provider: ${err.message}`));
@@ -510,11 +553,7 @@ async function main() {
 
     log(chalk.cyan(`\n  Running translations via ${provider.name}...\n`));
 
-    const enPath = path.join(
-      path.resolve(answers.projectPath),
-      "locales",
-      "en.json",
-    );
+    const enPath = path.join(path.resolve(projectPath), "locales", "en.json");
     if (!fs.existsSync(enPath)) {
       log(chalk.yellow("  No en.json found, skipping translations"));
     } else {
@@ -522,12 +561,12 @@ async function main() {
         fs.readFileSync(enPath, "utf-8"),
       );
 
-      const sources = loadTranslationSources(answers.projectPath);
+      const sources = loadTranslationSources(projectPath);
 
       const changedByLocale: Record<string, Record<string, string>> = {};
-      for (const locale of answers.locales) {
+      for (const locale of locales) {
         changedByLocale[locale] = getChangedLocaleKeys(
-          answers.projectPath,
+          projectPath,
           locale,
           enMap,
           sources[locale],
@@ -539,20 +578,33 @@ async function main() {
 
       let retranslateChanged = false;
       if (changedKeyCount > 0 && !options.dryRun) {
-        const { retranslate } = await (inquirer.prompt as any)([
-          {
-            type: "confirm",
-            name: "retranslate",
-            message: `${changedKeyCount} English string(s) changed since they were last translated. Re-translate them? (No keeps the existing translations and saves tokens; you'll be asked again next run.)`,
-            default: true,
-          },
-        ]);
-        retranslateChanged = retranslate;
+        if (settings.retranslateChanged === "ask") {
+          const { retranslate } = await (inquirer.prompt as any)([
+            {
+              type: "confirm",
+              name: "retranslate",
+              message: `${changedKeyCount} English string(s) changed since they were last translated. Re-translate them? (No keeps the existing translations and saves tokens; you'll be asked again next run.)`,
+              default: true,
+            },
+          ]);
+          retranslateChanged = retranslate;
+        } else {
+          retranslateChanged = settings.retranslateChanged;
+          log(
+            chalk.gray(
+              `  ${changedKeyCount} English string(s) changed since they were last translated — ${
+                retranslateChanged
+                  ? "re-translating them"
+                  : 'keeping existing translations ("retranslateChanged": false)'
+              }.`,
+            ),
+          );
+        }
       }
 
-      for (const locale of answers.locales) {
+      for (const locale of locales) {
         const missingKeys =
-          getMissingLocaleKeys(answers.projectPath, locale, enMap) ?? {};
+          getMissingLocaleKeys(projectPath, locale, enMap) ?? {};
         const changedKeys = changedByLocale[locale];
         const missingCount = Object.keys(missingKeys).length;
         const changedCount = Object.keys(changedKeys).length;
@@ -565,13 +617,17 @@ async function main() {
           if (missingCount === 0 && changedCount === 0) {
             log(chalk.gray(`  ⏭  ${locale} — up to date, skipping`));
           } else {
+            const changedNote =
+              changedCount === 0
+                ? ""
+                : settings.retranslateChanged === "ask"
+                  ? ` and ask about ${changedCount} changed key(s)`
+                  : settings.retranslateChanged
+                    ? ` and re-translate ${changedCount} changed key(s)`
+                    : ` (keeping ${changedCount} changed key(s))`;
             log(
               chalk.gray(
-                `  Dry run — would translate ${missingCount} new key(s)` +
-                  (changedCount > 0
-                    ? ` and ask about ${changedCount} changed key(s)`
-                    : "") +
-                  ` via ${provider.name} for ${locale}`,
+                `  Dry run — would translate ${missingCount} new key(s)${changedNote} via ${provider.name} for ${locale}`,
               ),
             );
           }
@@ -585,7 +641,7 @@ async function main() {
               : "up to date";
           log(chalk.gray(`  ⏭  ${locale} — ${note}, skipping`));
           sources[locale] = updateTranslationSources(
-            answers.projectPath,
+            projectPath,
             locale,
             enMap,
             sources[locale],
@@ -595,11 +651,7 @@ async function main() {
         }
 
         const isNew = !fs.existsSync(
-          path.join(
-            path.resolve(answers.projectPath),
-            "locales",
-            `${locale}.json`,
-          ),
+          path.join(path.resolve(projectPath), "locales", `${locale}.json`),
         );
         const changedNote =
           retranslateChanged && changedCount > 0
@@ -617,13 +669,9 @@ async function main() {
             "en",
             locale,
           );
-          mergeTranslationsIntoLocaleFile(
-            answers.projectPath,
-            locale,
-            translated,
-          );
+          mergeTranslationsIntoLocaleFile(projectPath, locale, translated);
           sources[locale] = updateTranslationSources(
-            answers.projectPath,
+            projectPath,
             locale,
             enMap,
             sources[locale],
@@ -631,17 +679,21 @@ async function main() {
           );
           log(chalk.green(`  ✔ ${locale} — done`));
         } catch (err: any) {
+          failedLocales++;
           log(chalk.red(`  ✘ ${locale} (${provider.name}) — ${err.message}`));
         }
       }
 
-      saveTranslationSources(answers.projectPath, sources, options.dryRun);
+      saveTranslationSources(projectPath, sources, options.dryRun);
     }
   }
 
   // Step 6 — Rewrite and track (only if we processed files)
   if (filesToProcess.length > 0) {
-    const depsReady = await ensureI18nDependencies(answers.projectPath);
+    const depsReady = await ensureI18nDependencies(
+      projectPath,
+      settings.installDependencies,
+    );
     if (!depsReady) {
       log(
         chalk.red("  Cannot rewrite files without i18n dependencies. Exiting."),
@@ -649,9 +701,9 @@ async function main() {
       process.exit(1);
     }
 
-    const rewriteSpinner = ora("Rewriting source files...").start();
+    const rewriteSpinner = spinner("Rewriting source files...");
     const rewriteResults = rewriteFiles({
-      projectPath: answers.projectPath,
+      projectPath,
       extracted: keyed,
       textComponents,
       dryRun: options.dryRun,
@@ -664,9 +716,9 @@ async function main() {
 
     // Step 6b — Deep rewrite (only in deep mode)
     let deepRewriteResults: typeof rewriteResults = [];
-    if (options.deep) {
+    if (settings.deep) {
       deepRewriteResults = rewriteDeepFiles({
-        projectPath: answers.projectPath,
+        projectPath,
         extracted: keyed,
         textComponents,
         dryRun: options.dryRun,
@@ -688,7 +740,7 @@ async function main() {
         .filter((r) => r.reason?.startsWith("Parse error"))
         .map((r) => r.filePath),
     );
-    const trackingData = loadTrackingData(answers.projectPath);
+    const trackingData = loadTrackingData(projectPath);
     for (const file of filesToProcess) {
       if (failedFiles.has(file.filePath)) continue;
       const fileKeys = keyed
@@ -697,7 +749,7 @@ async function main() {
       const fileContent = fs.readFileSync(file.filePath, "utf-8");
       markFileProcessed(trackingData, file.filePath, fileContent, fileKeys);
     }
-    saveTrackingData(answers.projectPath, trackingData, options.dryRun);
+    saveTrackingData(projectPath, trackingData, options.dryRun);
 
     const filesWithStrings = [...new Set(keyed.map((e: any) => e.filePath))];
     if (filesWithStrings.length > 0) {
@@ -706,7 +758,7 @@ async function main() {
           `\n  Files processed in this run: ${filesWithStrings.length}`,
         ),
       );
-      const absProjectPath = path.resolve(answers.projectPath);
+      const absProjectPath = path.resolve(projectPath);
       filesWithStrings.forEach((f) => {
         const count = keyed.filter((e: any) => e.filePath === f).length;
         const relativePath = path.relative(absProjectPath, f);
@@ -715,9 +767,72 @@ async function main() {
     }
   }
 
+  return failedLocales;
+}
+
+/** After an interactive run, offer to save the answers for --ci. */
+async function offerToSaveConfig(settings: RunSettings): Promise<void> {
+  if (options.dryRun) return;
+  const configPath = resolveConfigPath(settings.projectPath);
+  if (fs.existsSync(configPath)) return;
+
+  const { saveCiConfig } = await (inquirer.prompt as any)([
+    {
+      type: "confirm",
+      name: "saveCiConfig",
+      message: `Save these settings to ${CONFIG_FILE_NAME} so they can run without prompts (npx i18n-autopilot --ci)? API keys are not saved.`,
+      default: false,
+    },
+  ]);
+  if (!saveCiConfig) return;
+
+  writeConfigFile(configPath, configFromSettings(settings, configPath));
+  log(chalk.green(`\n  ✔ Saved ${configPath}`));
+  const envVars = PROVIDER_ENV_VARS[settings.provider];
+  if (envVars.required.length > 0) {
+    log(
+      chalk.gray(
+        `  In --ci mode, set ${envVars.required.join(" and ")} in the environment (e.g. as a CI secret).`,
+      ),
+    );
+  }
+}
+
+async function main() {
+  log(chalk.bold.cyan(`\n  i18n Autopilot${options.ci ? " (CI mode)" : ""}\n`));
+
+  let settings: RunSettings;
+
+  if (options.ci) {
+    try {
+      settings = ciRunSettings({
+        projectPath: options.project,
+        configPath: options.config,
+        deepFlag: Boolean(options.deep),
+        env: process.env,
+      });
+    } catch (err) {
+      if (err instanceof ConfigError) {
+        log(chalk.red(`\n  ✘ ${err.message}\n`));
+        process.exit(2);
+      }
+      throw err;
+    }
+  } else {
+    settings = await interactiveSettings();
+  }
+
+  const failedLocales = await runPipeline(settings);
+
+  if (!options.ci) await offerToSaveConfig(settings);
+
   log(chalk.gray(`\n  Full log saved to: ${getLogPath()}`));
-  log(chalk.green("\n  ✨ Done!\n"));
-  process.exit(0);
+  if (failedLocales > 0) {
+    log(chalk.red(`\n  ✘ ${failedLocales} locale(s) failed to translate.\n`));
+  } else {
+    log(chalk.green("\n  ✨ Done!\n"));
+  }
+  process.exit(options.ci && failedLocales > 0 ? 1 : 0);
 }
 
 if (options.check) runCheck();
