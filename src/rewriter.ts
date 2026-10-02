@@ -19,7 +19,7 @@ import {
   readJSXText,
 } from "./astHelpers";
 
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 import chalk from "chalk";
 import inquirer from "inquirer";
 import { log } from "./reporter";
@@ -399,16 +399,15 @@ export async function ensureI18nDependencies(
 
   if (hasI18next && hasReactI18next) return true;
 
-  const missing = [
+  const missingPackages = [
     !hasI18next && "i18next",
     !hasReactI18next && "react-i18next",
-  ]
-    .filter(Boolean)
-    .join(" ");
+  ].filter((p): p is string => Boolean(p));
+  const missing = missingPackages.join(" ");
 
   const pm = detectPackageManager(projectPath);
-  const installCmd =
-    pm === "yarn" ? `yarn add ${missing}` : `npm install ${missing}`;
+  const installArgs = [pm === "yarn" ? "add" : "install", ...missingPackages];
+  const installCmd = `${pm} ${installArgs.join(" ")}`;
 
   const { permission } = await inquirer.prompt([
     {
@@ -427,8 +426,13 @@ export async function ensureI18nDependencies(
   }
 
   try {
-    execSync(`cd ${path.resolve(projectPath)} && ${installCmd}`, {
+    // The project path goes in `cwd`, never into a command string, so a path
+    // containing shell syntax can't run extra commands. Windows needs a shell
+    // to launch npm/yarn (.cmd shims); the arguments there are fixed names.
+    execFileSync(pm, installArgs, {
+      cwd: path.resolve(projectPath),
       stdio: "inherit",
+      shell: process.platform === "win32",
     });
     return true;
   } catch {
