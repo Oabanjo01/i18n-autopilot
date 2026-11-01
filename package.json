@@ -57,7 +57,7 @@
   ],
   "dependencies": {
     "@anthropic-ai/sdk": "^0.129.0",
-    "@aws-sdk/client-translate": "3.1142.0",
+    "@aws-sdk/client-translate": "3.1159.0",
     "@babel/generator": "^7.29.1",
     "@babel/parser": "^7.29.9",
     "@babel/traverse": "^7.29.0",
